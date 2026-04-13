@@ -2,6 +2,14 @@ let history = []
 let config = { maxHistory: 100, autoCleanup: true }
 let clipboardInterval = null
 
+function formatTime(time) {
+  const now = Date.now()
+  const diff = now - time
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
+  return new Date(time).toLocaleTimeString()
+}
+
 module.exports = {
   activate(context) {
     context.registerPanel({
@@ -20,6 +28,39 @@ module.exports = {
       actions: [
         { id: 'clear', label: '清空', icon: 'trash' }
       ]
+    })
+    
+    context.registerPage({
+      title: '剪贴板历史',
+      width: 500,
+      height: 400,
+      template: 'clipboard-history'
+    })
+
+    context.registerCommand('getPanelData', async () => {
+      return {
+        count: history.length,
+        items: history.slice(0, 3).map(item => ({
+          text: item.content.substring(0, 25),
+          content: item.content,
+          time: formatTime(item.time)
+        }))
+      }
+    })
+
+    context.registerCommand('getPageData', async () => {
+      return { history }
+    })
+
+    context.registerCommand('copy', async (args) => {
+      if (context.clipboard && args?.content) {
+        await context.clipboard.writeText(args.content)
+        if (context.notification) {
+          context.notification.show('剪贴板', '已复制')
+        }
+        return { title: '已复制', subtitle: args.content.substring(0, 30) }
+      }
+      return { title: '复制失败', subtitle: '' }
     })
     
     context.registerPage({

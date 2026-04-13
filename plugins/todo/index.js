@@ -98,6 +98,18 @@ module.exports = {
       template: 'todo-list'
     })
     
+    context.registerCommand('getPanelData', async () => {
+      const pending = todos.filter(t => !t.completed)
+      return {
+        pendingCount: pending.length,
+        items: pending.slice(0, 3).map(t => ({
+          text: t.text,
+          icon: getPriorityIcon(t.priority),
+          due: t.dueDate ? formatDueDate(t.dueDate) : ''
+        }))
+      }
+    })
+
     context.registerCommand('getPageData', async () => {
       return {
         todos,

@@ -1,3 +1,5 @@
+let lastCaptureTime = null
+
 module.exports = {
   activate(context) {
     const screenshot = context.screenshot
@@ -20,6 +22,16 @@ module.exports = {
       width: 400,
       height: 300,
       template: 'screenshot-options'
+    })
+
+    context.registerCommand('getPanelData', async () => {
+      return {
+        lastCapture: lastCaptureTime ? new Date(lastCaptureTime).toLocaleTimeString() : null
+      }
+    })
+
+    context.registerCommand('getPageData', async () => {
+      return {}
     })
 
     context.registerCommand('region', async () => {

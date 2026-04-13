@@ -1,4 +1,5 @@
 let lastResult = null
+let lastExpression = null
 
 function evaluate(expr) {
   const sanitized = expr.replace(/[^0-9+\-*/().%\s]/g, '')
@@ -31,9 +32,17 @@ module.exports = {
       template: 'calculator'
     })
 
+    context.registerCommand('getPanelData', async () => {
+      return {
+        lastResult,
+        lastExpression,
+        input: ''
+      }
+    })
+
     context.registerCommand('getPageData', async () => {
       return {
-        expression: '',
+        expression: lastExpression || '',
         lastResult
       }
     })
@@ -51,6 +60,7 @@ module.exports = {
       const result = evaluate(expr)
       if (result !== null) {
         lastResult = result
+        lastExpression = expr
         if (context.clipboard) {
           await context.clipboard.writeText(result.toString())
         }

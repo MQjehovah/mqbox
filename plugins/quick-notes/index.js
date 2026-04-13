@@ -27,11 +27,35 @@ module.exports = {
         items: notes.slice(0, 3).map(n => ({
           text: n.content.substring(0, 30),
           subtitle: n.tags.join(' ')
+        })),
+        actions: [
+          { id: 'add', label: '添加', icon: 'plus' }
+        ]
+      }
+    })
+    
+    context.registerPage({
+      title: '快速笔记',
+      width: 500,
+      height: 400,
+      template: 'notes'
+    })
+
+    context.registerCommand('getPanelData', async () => {
+      return {
+        count: notes.length,
+        items: notes.slice(0, 2).map(n => ({
+          text: n.content.substring(0, 25),
+          tags: n.tags
         }))
-      },
-      actions: [
-        { id: 'add', label: '添加', icon: 'plus' }
-      ]
+      }
+    })
+
+    context.registerCommand('getPageData', async () => {
+      return {
+        notes,
+        newNoteContent: ''
+      }
     })
     
     context.registerPage({
