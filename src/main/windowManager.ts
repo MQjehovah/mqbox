@@ -55,11 +55,8 @@ function getCenterPosition(width: number, height: number) {
 }
 
 function createWindow(type: WindowType): BrowserWindow {
-  console.log(`createWindow called for: ${type}`)
   const config = windowConfigs[type]
   const { x, y } = getCenterPosition(config.width, config.height)
-  
-  console.log(`Creating window with config:`, { width: config.width, height: config.height, view: config.view, x, y })
   
   const win = new BrowserWindow({
     width: config.width,
@@ -79,22 +76,11 @@ function createWindow(type: WindowType): BrowserWindow {
     }
   })
   
-  console.log(`Window created, id: ${win.id}`)
-  
   loadView(win, config.view)
-  console.log(`Loading view: ${config.view}`)
-  
-  win.once('ready-to-show', () => {
-    console.log(`Window ${type} ready to show`)
-    win.show()
-  })
-  win.on('closed', () => { 
-    console.log(`Window ${type} closed`)
-    windows[type] = null 
-  })
+  win.once('ready-to-show', () => win.show())
+  win.on('closed', () => { windows[type] = null })
   
   windows[type] = win
-  console.log(`Window ${type} stored in windows object`)
   return win
 }
 
@@ -103,16 +89,11 @@ export function getWindow(type: WindowType): BrowserWindow | null {
 }
 
 export function showWindow(type: WindowType): BrowserWindow | null {
-  console.log(`showWindow called for: ${type}`)
   const win = windows[type]
-  if (!win) {
-    console.log(`No existing window, creating new one`)
-    return createWindow(type)
-  }
+  if (!win) return createWindow(type)
   
   const config = windowConfigs[type]
   const { x, y } = getCenterPosition(config.width, config.height)
-  console.log(`Showing existing window, repositioning to`, { x, y, width: config.width, height: config.height })
   win.setPosition(x, y)
   win.setSize(config.width, config.height)
   win.show()
@@ -126,20 +107,12 @@ export function hideWindow(type: WindowType) {
 }
 
 export function toggleWindow(type: WindowType): BrowserWindow | null {
-  console.log(`toggleWindow called for: ${type}`)
   const win = windows[type]
-  console.log(`Current window state:`, win ? 'exists' : 'null', win && win.isVisible() ? 'visible' : 'hidden')
-  
-  if (!win) {
-    console.log(`Creating new window for: ${type}`)
-    return showWindow(type)
-  }
+  if (!win) return showWindow(type)
   if (win.isVisible()) {
-    console.log(`Hiding window: ${type}`)
     win.hide()
     return null
   }
-  console.log(`Showing existing window: ${type}`)
   return showWindow(type)
 }
 

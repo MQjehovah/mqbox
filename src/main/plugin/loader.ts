@@ -3,8 +3,6 @@ import { join } from 'path'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import type { PluginInfo } from '../../shared/types'
 
-const pluginsDir = join(app.getPath('userData'), 'plugins')
-
 interface PluginManifest {
   name: string
   version: string
@@ -17,10 +15,23 @@ interface PluginManifest {
   permissions: string[]
 }
 
+function getPluginsDir(): string {
+  if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
+    return join(process.cwd(), 'plugins')
+  }
+  return join(app.getPath('userData'), 'plugins')
+}
+
 export function loadPlugins(): Map<string, { manifest: PluginManifest; module: any }> {
   const plugins = new Map()
+  const pluginsDir = getPluginsDir()
   
-  if (!existsSync(pluginsDir)) return plugins
+  console.log('Loading plugins from:', pluginsDir)
+  
+  if (!existsSync(pluginsDir)) {
+    console.log('Plugins directory not found')
+    return plugins
+  }
   
   const dirs = readdirSync(pluginsDir, { withFileTypes: true })
     .filter(d => d.isDirectory())
@@ -38,6 +49,7 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
       if (existsSync(indexPath)) {
         const module = require(indexPath)
         plugins.set(dir.name, { manifest, module })
+        console.log(`Loaded plugin: ${dir.name}`)
       }
     } catch (error) {
       console.error(`加载插件 ${dir.name} 失败:`, error)

@@ -1,4 +1,5 @@
 import { clipboard, shell, Notification } from 'electron'
+import { startScreenshot, captureRegion, captureFullscreen, cancelScreenshot } from '../screenshot'
 
 export function createSandbox(permissions: string[]) {
   const commands = new Map<string, Function>()
@@ -35,6 +36,13 @@ export function createSandbox(permissions: string[]) {
     shell: hasPermission('shell') ? {
       execute: async (command: string) => null,
       openExternal: (url: string) => shell.openExternal(url)
+    } : null,
+    
+    screenshot: hasPermission('screenshot') ? {
+      start: async () => startScreenshot(),
+      captureRegion: async (x: number, y: number, width: number, height: number) => captureRegion(x, y, width, height),
+      captureFullscreen: async () => captureFullscreen(),
+      cancel: () => cancelScreenshot()
     } : null
   }
   

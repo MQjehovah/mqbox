@@ -6,6 +6,14 @@ const loadedPlugins = loadPlugins()
 const activePlugins = new Map<string, any>()
 const pluginContexts = new Map<string, any>()
 
+export function initPlugins() {
+  console.log('Initializing plugins, loaded:', loadedPlugins.size)
+  for (const [id, plugin] of loadedPlugins) {
+    console.log(`Enabling plugin: ${id}`)
+    enablePlugin(id)
+  }
+}
+
 export function listPlugins(): PluginInfo[] {
   return Array.from(loadedPlugins.entries()).map(([id, { manifest }]) => 
     getPluginInfo(id, manifest))
@@ -21,6 +29,7 @@ export function enablePlugin(id: string): boolean {
       sandbox.commands.set(name, handler)
     },
     registerSearchProvider: (provider: any) => {
+      console.log(`Registered search provider: ${provider.keyword} for plugin ${id}`)
       sandbox.searchProviders.set(provider.keyword, provider)
     },
     clipboard: sandbox.api.clipboard,
@@ -28,7 +37,8 @@ export function enablePlugin(id: string): boolean {
     ui: sandbox.api.ui,
     storage: sandbox.api.storage,
     notification: sandbox.api.notification,
-    shell: sandbox.api.shell
+    shell: sandbox.api.shell,
+    screenshot: sandbox.api.screenshot
   }
   
   plugin.module.activate(context)
@@ -50,13 +60,29 @@ export function disablePlugin(id: string): boolean {
 }
 
 export async function executePlugin(id: string, action: string, args: any): Promise<any> {
+  console.log(`executePlugin called: id=${id}, action=${action}, args=`, args)
   const sandbox = activePlugins.get(id)
-  if (!sandbox) return null
+  if (!sandbox) {
+    console.log(`Plugin ${id} not found in active plugins`)
+    return null
+  }
   
   const handler = sandbox.commands.get(action)
-  if (handler) return handler(args)
+  if (!handler) {
+    console.log(`Command ${action} not found in plugin ${id}`)
+    console.log('Available commands:', Array.from(sandbox.commands.keys()))
+    return null
+  }
   
-  return null
+  console.log(`Executing command ${action} in plugin ${id}`)
+  try {
+    const result = await handler(args)
+    console.log(`Command result:`, result)
+    return result
+  } catch (e) {
+    console.error(`Command execution error:`, e)
+    return null
+  }
 }
 
 export function getSearchProviders(): Map<string, any> {

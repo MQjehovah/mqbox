@@ -17,18 +17,37 @@ export const useSearchStore = defineStore('search', () => {
 
     isLoading.value = true
     try {
-      const files: FileResult[] = await (window as any).mqbox.search.query(q)
-      results.value = files.map(f => ({
-        type: 'file',
-        title: f.name,
-        subtitle: f.path,
-        icon: getFileIcon(f.extension),
-        action: 'openFile',
-        actionArgs: { path: f.path }
-      }))
+      const parts = q.trim().split(/\s+/)
+      const keyword = parts[0]
+      const rest = parts.slice(1).join(' ')
+      
+      const pluginResults = await (window as any).mqbox.search.plugin(keyword, rest)
+      
+      if (pluginResults && pluginResults.length > 0) {
+        results.value = pluginResults.map((r: any) => ({
+          type: 'plugin',
+          title: r.title,
+          subtitle: r.subtitle || '',
+          icon: r.icon || 'plugin',
+          action: r.action,
+          actionArgs: r.actionArgs,
+          pluginId: r.pluginId
+        }))
+      } else {
+        const files: FileResult[] = await (window as any).mqbox.search.query(q)
+        results.value = files.map(f => ({
+          type: 'file',
+          title: f.name,
+          subtitle: f.path,
+          icon: getFileIcon(f.extension),
+          action: 'openFile',
+          actionArgs: { path: f.path }
+        }))
+      }
       selectedIndex.value = 0
     } catch (error) {
       console.error('搜索失败:', error)
+      results.value = []
     }
     isLoading.value = false
   }
@@ -46,7 +65,19 @@ export const useSearchStore = defineStore('search', () => {
     if (!result) return
 
     if (result.type === 'file') {
-      await (window as any).mqbox.file.open(result.actionArgs.path)
+      await (window as any).mqbox.file.open(result.actionArgs?.path)
+      (window as any).mqbox.window.hide()
+    } else if (result.type === 'plugin' && result.action) {
+      const parts = result.action.split(':')
+      if (parts.length >= 2) {
+        const pluginId = result.pluginId || parts[0]
+        const actionName = parts.slice(1).join(':')
+        try {
+          await (window as any).mqbox.plugin.execute(pluginId, actionName, result.actionArgs)
+        } catch (e) {
+          console.error('Plugin execute error:', e)
+        }
+      }
       (window as any).mqbox.window.hide()
     }
   }

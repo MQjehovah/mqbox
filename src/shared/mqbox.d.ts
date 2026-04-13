@@ -1,6 +1,8 @@
 export interface MqboxAPI {
   search: {
     query: (query: string) => Promise<any>
+    plugin: (keyword: string, query: string) => Promise<any[]>
+    getProviders: () => Promise<{ keyword: string; name: string }[]>
   }
   plugin: {
     list: () => Promise<any>
@@ -26,6 +28,12 @@ export interface MqboxAPI {
   file: {
     open: (path: string) => Promise<string>
     showInExplorer: (path: string) => Promise<void>
+  }
+  screenshot: {
+    getScreen: () => Promise<string | null>
+    capture: (x: number, y: number, width: number, height: number) => Promise<string | null>
+    start: () => void
+    cancel: () => void
   }
 }
 

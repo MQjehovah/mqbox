@@ -4,9 +4,11 @@ import { setupTray } from './tray'
 import { setupIPC } from './ipc'
 import { initConfig } from './config'
 import { showWindow } from './windowManager'
+import { initPlugins } from './plugin/host'
 
 app.whenReady().then(async () => {
   await initConfig()
+  initPlugins()
   showWindow('main')
   setupShortcut()
   setupTray()

@@ -6,5 +6,5 @@
   "main": "index.js",
   "keywords": ["ss", "screenshot"],
   "activationEvents": ["onKeyword:ss", "onKeyword:screenshot"],
-  "permissions": ["clipboard", "notification"]
+  "permissions": ["clipboard", "notification", "screenshot"]
 }

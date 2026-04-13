@@ -5,6 +5,7 @@ export interface SearchResult {
   icon?: string
   action: string
   actionArgs?: any
+  pluginId?: string
 }
 
 export interface FileResult {
