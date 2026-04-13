@@ -1,49 +1,19 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import SearchBox from './components/SearchBox.vue'
 import MainPanel from './components/MainPanel.vue'
 import PluginManager from './components/PluginManager.vue'
-import PluginConfig from './components/PluginConfig.vue'
 
-const currentView = ref('main')
-const selectedPluginId = ref('')
-
-onMounted(() => {
-  ;(window as any).mqbox?.on('show-plugin-manager', () => {
-    currentView.value = 'plugin-manager'
-  })
-  ;(window as any).mqbox?.on('show-settings', () => {
-    currentView.value = 'settings'
-  })
-  ;(window as any).mqbox?.on('show-search', () => {
-    currentView.value = 'search'
-  })
-  ;(window as any).mqbox?.on('show-main', () => {
-    currentView.value = 'main'
-  })
+const view = computed(() => {
+  const params = new URLSearchParams(window.location.search)
+  return params.get('view') || 'main'
 })
-
-const handlePluginConfig = (id: string) => {
-  selectedPluginId.value = id
-  currentView.value = 'plugin-config'
-}
-
-const handleMinimize = () => {
-  ;(window as any).mqbox?.window.minimize()
-}
-
-const handleClose = () => {
-  ;(window as any).mqbox?.window.hide()
-}
 </script>
 
 <template>
-  <div class="app-container">
-    <MainPanel v-if="currentView === 'main'" @minimize="handleMinimize" @close="handleClose" />
-    <SearchBox v-if="currentView === 'search'" />
-    <PluginManager v-if="currentView === 'plugin-manager'" @close="currentView = 'main'" @config="handlePluginConfig" />
-    <PluginConfig v-if="currentView === 'plugin-config'" :pluginId="selectedPluginId" @close="currentView = 'plugin-manager'" />
-  </div>
+  <MainPanel v-if="view === 'main'" />
+  <SearchBox v-if="view === 'search'" />
+  <PluginManager v-if="view === 'plugin-manager'" />
 </template>
 
 <style>

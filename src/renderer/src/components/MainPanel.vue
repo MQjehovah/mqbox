@@ -1,14 +1,52 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'minimize'): void
 }>()
+
+const openPluginManager = () => {
+  window.mqbox?.window?.openPluginManager?.()
+}
+
+const isResizing = ref(false)
+const startX = ref(0)
+const startY = ref(0)
+const startWidth = ref(280)
+const startHeight = ref(600)
+
+const startResize = (e: MouseEvent) => {
+  isResizing.value = true
+  startX.value = e.clientX
+  startY.value = e.clientY
+  const panel = e.target as HTMLElement
+  const container = panel.closest('.main-panel') as HTMLElement
+  if (container) {
+    startWidth.value = container.offsetWidth
+    startHeight.value = container.offsetHeight
+  }
+}
+
+const doResize = (e: MouseEvent) => {
+  if (!isResizing.value) return
+  const width = startWidth.value + (e.clientX - startX.value)
+  const height = startHeight.value + (e.clientY - startY.value)
+  ;(window as any).mqbox?.window.setSize(Math.max(200, width), Math.max(300, height))
+}
+
+const stopResize = () => {
+  isResizing.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('mousemove', doResize)
+  document.addEventListener('mouseup', stopResize)
+})
 </script>
 
 <template>
-  <div style="width: 280px; height: 600px; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.18); border: 1px solid #E0E0E0; display: flex; flex-direction: column; overflow: hidden">
+  <div class="main-panel" style="width: 280px; height: 600px; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.18); border: 1px solid #E0E0E0; display: flex; flex-direction: column; overflow: hidden; position: relative">
     <div style="height: 32px; background: #F5F5F5; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid #E0E0E0; -webkit-app-region: drag">
       <span style="font-size: 13px; color: #666666; font-weight: 500; -webkit-app-region: no-drag">MQBox</span>
       <div style="display: flex; gap: 8px; -webkit-app-region: no-drag">
@@ -34,7 +72,7 @@ const emit = defineEmits<{
           <span style="font-size: 12px; color: #28A745">在线</span>
         </div>
       </div>
-      <button style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: transparent">
+      <button style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: transparent" @click="openPluginManager">
         <svg style="width: 18px; height: 18px; color: #666666" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
@@ -179,6 +217,11 @@ const emit = defineEmits<{
         <span style="font-size: 13px; color: #0078D4">添加更多插件</span>
       </button>
       </div>
+    </div>
+    <div style="position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: se-resize; -webkit-app-region: no-drag; display: flex; align-items: center; justify-content: center" @mousedown="startResize">
+      <svg style="width: 12px; height: 12px; color: #CCCCCC" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 21H3V3"/><path d="M21 12V3H12"/>
+      </svg>
     </div>
   </div>
 </template>

@@ -19,7 +19,8 @@ const api = {
     show: () => ipcRenderer.send('window:show'),
     hide: () => ipcRenderer.send('window:hide'),
     minimize: () => ipcRenderer.send('window:hide'),
-    setSize: (width: number, height: number) => ipcRenderer.send('window:set-size', width, height)
+    setSize: (width: number, height: number) => ipcRenderer.send('window:set-size', width, height),
+    openPluginManager: () => ipcRenderer.send('window:open-plugin-manager')
   },
   clipboard: {
     read: () => ipcRenderer.invoke('clipboard:read'),
@@ -28,9 +29,6 @@ const api = {
   file: {
     open: (path: string) => ipcRenderer.invoke('file:open', path),
     showInExplorer: (path: string) => ipcRenderer.invoke('file:showInExplorer', path)
-  },
-  on: (channel: string, callback: Function) => {
-    ipcRenderer.on(channel, (_, ...args) => callback(...args))
   }
 }
 

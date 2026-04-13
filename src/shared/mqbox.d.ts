@@ -17,6 +17,7 @@ export interface MqboxAPI {
     hide: () => void
     minimize: () => void
     setSize: (width: number, height: number) => void
+    openPluginManager: () => void
   }
   clipboard: {
     read: () => Promise<string>
@@ -26,7 +27,6 @@ export interface MqboxAPI {
     open: (path: string) => Promise<string>
     showInExplorer: (path: string) => Promise<void>
   }
-  on: (channel: string, callback: Function) => void
 }
 
 declare global {

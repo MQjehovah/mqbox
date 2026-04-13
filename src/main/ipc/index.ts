@@ -2,6 +2,7 @@ import { ipcMain, clipboard, BrowserWindow, shell } from 'electron'
 import { searchFiles } from '../search/everything'
 import { listPlugins, enablePlugin, disablePlugin, executePlugin } from '../plugin/host'
 import { getConfig, setConfig } from '../config'
+import { showWindow } from '../windowManager'
 
 export function setupIPC() {
   ipcMain.handle('search:query', async (_, query: string) => {
@@ -18,14 +19,16 @@ export function setupIPC() {
     key ? getConfig()[key as keyof ReturnType<typeof getConfig>] : getConfig())
   ipcMain.handle('config:set', async (_, key: string, value: any) => setConfig(key, value))
 
-  ipcMain.on('window:show', () => BrowserWindow.getAllWindows()[0]?.show())
-  ipcMain.on('window:hide', () => BrowserWindow.getAllWindows()[0]?.hide())
-  ipcMain.on('window:minimize', () => BrowserWindow.getAllWindows()[0]?.hide())
+  ipcMain.on('window:show', () => BrowserWindow.getFocusedWindow()?.show())
+  ipcMain.on('window:hide', () => BrowserWindow.getFocusedWindow()?.hide())
+  ipcMain.on('window:minimize', () => BrowserWindow.getFocusedWindow()?.hide())
   ipcMain.on('window:set-size', (_, width: number, height: number) => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win) {
-      win.setSize(width, height)
-    }
+    const win = BrowserWindow.getFocusedWindow()
+    if (win) win.setSize(width, height)
+  })
+
+  ipcMain.on('window:open-plugin-manager', () => {
+    showWindow('pluginManager')
   })
 
   ipcMain.handle('clipboard:read', async () => clipboard.readText())
