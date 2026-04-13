@@ -88,15 +88,21 @@ const getPanelDynamicData = (panel: PluginPanel) => {
   return panelData.value[panel.pluginId] || panel.data
 }
 
+const handlePluginReloaded = () => {
+  loadPlugins()
+}
+
 onMounted(() => {
   loadPlugins()
   document.addEventListener('mousemove', doResize)
   document.addEventListener('mouseup', stopResize)
+  window.mqbox?.window.on('plugin:reloaded', handlePluginReloaded)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', doResize)
   document.removeEventListener('mouseup', stopResize)
+  window.mqbox?.window.removeListener('plugin:reloaded', handlePluginReloaded)
 })
 </script>
 
@@ -299,10 +305,82 @@ onUnmounted(() => {
                   </div>
                 </div>
               </div>
-              <div v-else class="text-[11px] text-[#666666] text-center py-[8px]">暂无笔记</div>
+<div v-else class="text-[11px] text-[#666666] text-center py-[8px]">暂无笔记</div>
             </div>
 
-            <div v-else 
+            <div v-else-if="panel.template === 'player'"
+              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[8px]">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-[8px]">
+                  <div class="w-[32px] h-[32px] rounded-lg flex items-center justify-center" :style="{ background: (panel.iconColor || getPluginColor(panel.pluginId)) + '20' }">
+                    <svg class="w-[18px] h-[18px]" :style="{ color: panel.iconColor || getPluginColor(panel.pluginId) }" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col gap-[1px]">
+                    <span class="text-[13px] text-[#1E1E1E] font-semibold">{{ panel.title || '播放器' }}</span>
+                    <span class="text-[11px] text-[#999999] truncate max-w-[140px]">{{ getPanelDynamicData(panel)?.currentTrack?.name || '未在播放' }}</span>
+                  </div>
+                </div>
+                <svg class="w-[14px] h-[14px] text-[#999999] cursor-pointer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" @click="openPluginPage(panel.pluginId)">
+                  <path d="m9 18 6-6-6-6"/>
+                </svg>
+              </div>
+              <div v-if="getPanelDynamicData(panel)?.currentTrack" class="flex flex-col gap-[6px]">
+                <div class="flex items-center gap-[4px] h-[4px]">
+                  <div class="flex-1 h-[4px] rounded-full bg-[#E0E0E0] overflow-hidden">
+                    <div class="h-full rounded-full" :style="{ width: (getPanelDynamicData(panel)?.currentTime / getPanelDynamicData(panel)?.duration * 100 || 0) + '%', background: panel.iconColor || getPluginColor(panel.pluginId) }"></div>
+                  </div>
+                </div>
+                <div class="flex items-center justify-center gap-[8px]">
+                  <button 
+                    class="w-[28px] h-[28px] rounded-full bg-[#F5F5F5] flex items-center justify-center hover:bg-[#EBEBEB]"
+                    @click.stop="handlePanelAction(panel.pluginId, 'prev')"
+                  >
+                    <svg class="w-[14px] h-[14px] text-[#666666]" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                    </svg>
+                  </button>
+                  <button 
+                    v-if="getPanelDynamicData(panel)?.isPlaying"
+                    class="w-[36px] h-[36px] rounded-full flex items-center justify-center hover:opacity-80"
+                    :style="{ background: panel.iconColor || getPluginColor(panel.pluginId) }"
+                    @click.stop="handlePanelAction(panel.pluginId, 'pause')"
+                  >
+                    <svg class="w-[18px] h-[18px] text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                  </button>
+                  <button 
+                    v-else
+                    class="w-[36px] h-[36px] rounded-full flex items-center justify-center hover:opacity-80"
+                    :style="{ background: panel.iconColor || getPluginColor(panel.pluginId) }"
+                    @click.stop="handlePanelAction(panel.pluginId, 'play', {})"
+                  >
+                    <svg class="w-[18px] h-[18px] text-white" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                  <button 
+                    class="w-[28px] h-[28px] rounded-full bg-[#F5F5F5] flex items-center justify-center hover:bg-[#EBEBEB]"
+                    @click.stop="handlePanelAction(panel.pluginId, 'next')"
+                  >
+                    <svg class="w-[14px] h-[14px] text-[#666666]" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div v-else class="flex items-center justify-center gap-[6px] py-[4px]">
+                <button 
+                  class="h-[32px] rounded-md text-white text-[12px] px-[12px] hover:opacity-80"
+                  :style="{ background: panel.iconColor || getPluginColor(panel.pluginId) }"
+                  @click.stop="openPluginPage(panel.pluginId)"
+                >打开播放器</button>
+              </div>
+            </div>
+
+            <div v-else
               class="rounded-lg bg-[#F5F5F5] border border-[#E0E0E0] p-[10px] flex flex-col gap-[6px] hover:bg-[#EBEBEB] cursor-pointer"
               :style="{ minHeight: panel.height + 'px' }"
               @click="panel.pluginId && openPluginPage(panel.pluginId)">

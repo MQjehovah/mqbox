@@ -34,6 +34,7 @@ export interface PluginPanel {
   pluginId: string
   height: number
   type?: 'card' | 'list' | 'player' | 'input' | 'custom'
+  template?: string
   title?: string
   icon?: string
   iconColor?: string

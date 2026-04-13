@@ -38,8 +38,14 @@ export function setupIPC() {
   ipcMain.handle('plugin:disable', async (_, id: string) => disablePlugin(id))
   ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => 
     executePlugin(id, action, args))
-  ipcMain.handle('plugin:reload', async () => {
+ipcMain.handle('plugin:reload', async () => {
     reloadPlugins()
+    const mainWindow = BrowserWindow.getAllWindows().find(w => 
+      w.webContents.getURL().includes('view=main')
+    )
+    if (mainWindow) {
+      mainWindow.webContents.send('plugin:reloaded')
+    }
     return listPlugins()
   })
   ipcMain.handle('plugin:get-panels', async () => getPluginPanels())

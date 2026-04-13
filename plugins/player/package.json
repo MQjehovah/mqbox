@@ -1,0 +1,11 @@
+{
+  "name": "player",
+  "version": "1.0.0",
+  "displayName": "媒体播放器",
+  "description": "播放本地音频和视频文件",
+  "main": "index.js",
+  "icon": "player",
+  "keywords": ["player", "播放器", "music", "video"],
+  "activationEvents": ["onKeyword:player", "onKeyword:play"],
+  "permissions": ["storage", "files:read", "notification"]
+}

@@ -25,7 +25,7 @@ export interface MqboxAPI {
     get: (key?: string) => Promise<any>
     set: (key: string, value: any) => Promise<void>
   }
-  window: {
+window: {
     show: () => void
     hide: () => void
     minimize: () => void
@@ -34,6 +34,7 @@ export interface MqboxAPI {
     openPluginManager: () => void
     openPluginPage: (pluginId: string) => void
     on: (channel: string, callback: (...args: any[]) => void) => void
+    removeListener: (channel: string, callback: (...args: any[]) => void) => void
   }
   clipboard: {
     read: () => Promise<string>

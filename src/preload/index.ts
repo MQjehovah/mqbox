@@ -20,7 +20,7 @@ const api = {
     get: (key?: string) => ipcRenderer.invoke('config:get', key),
     set: (key: string, value: any) => ipcRenderer.invoke('config:set', key, value)
   },
-  window: {
+window: {
     show: () => ipcRenderer.send('window:show'),
     hide: () => ipcRenderer.send('window:hide'),
     minimize: () => ipcRenderer.send('window:minimize'),
@@ -30,6 +30,9 @@ const api = {
     openPluginPage: (pluginId: string) => ipcRenderer.send('window:open-plugin-page', pluginId),
     on: (channel: string, callback: (...args: any[]) => void) => {
       ipcRenderer.on(channel, (_, ...args) => callback(...args))
+    },
+    removeListener: (channel: string, callback: (...args: any[]) => void) => {
+      ipcRenderer.removeListener(channel, callback)
     }
   },
   clipboard: {
