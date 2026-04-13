@@ -3,7 +3,7 @@ import { searchFiles } from '../search/everything'
 import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders } from '../plugin/host'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
-import { captureScreen, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
+import { captureAllScreens, captureScreen, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
 
 export function setupIPC() {
   ipcMain.handle('search:query', async (_, query: string) => {
@@ -60,8 +60,12 @@ export function setupIPC() {
   ipcMain.handle('file:open', async (_, path: string) => shell.openPath(path))
   ipcMain.handle('file:showInExplorer', async (_, path: string) => shell.showItemInFolder(path))
 
-  ipcMain.handle('screenshot:get-screen', async () => {
-    return await captureScreen()
+  ipcMain.handle('screenshot:get-all-screens', async () => {
+    return await captureAllScreens()
+  })
+
+  ipcMain.handle('screenshot:get-screen', async (_, displayId?: number) => {
+    return await captureScreen(displayId)
   })
 
   ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: number, height: number) => {

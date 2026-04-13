@@ -33,7 +33,8 @@ const api = {
     showInExplorer: (path: string) => ipcRenderer.invoke('file:showInExplorer', path)
   },
   screenshot: {
-    getScreen: () => ipcRenderer.invoke('screenshot:get-screen'),
+    getAllScreens: () => ipcRenderer.invoke('screenshot:get-all-screens'),
+    getScreen: (displayId?: number) => ipcRenderer.invoke('screenshot:get-screen', displayId),
     capture: (x: number, y: number, width: number, height: number) => 
       ipcRenderer.invoke('screenshot:capture', x, y, width, height),
     start: () => ipcRenderer.send('screenshot:start'),

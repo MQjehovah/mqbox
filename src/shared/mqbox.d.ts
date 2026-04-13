@@ -1,3 +1,10 @@
+interface DisplayInfo {
+  id: number
+  bounds: { x: number; y: number; width: number; height: number }
+  scaleFactor: number
+  isPrimary: boolean
+}
+
 export interface MqboxAPI {
   search: {
     query: (query: string) => Promise<any>
@@ -30,7 +37,8 @@ export interface MqboxAPI {
     showInExplorer: (path: string) => Promise<void>
   }
   screenshot: {
-    getScreen: () => Promise<string | null>
+    getAllScreens: () => Promise<{ displays: DisplayInfo[]; images: string[] }>
+    getScreen: (displayId?: number) => Promise<string | null>
     capture: (x: number, y: number, width: number, height: number) => Promise<string | null>
     start: () => void
     cancel: () => void
