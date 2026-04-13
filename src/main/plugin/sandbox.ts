@@ -1,9 +1,22 @@
-import { clipboard, shell, Notification } from 'electron'
+import { clipboard, shell, Notification, app } from 'electron'
 import { startScreenshot, captureRegion, captureFullscreen, cancelScreenshot } from '../screenshot'
+import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 
-export function createSandbox(permissions: string[]) {
+const pluginDataDir = join(app.getPath('userData'), 'plugin-data')
+if (!existsSync(pluginDataDir)) {
+  mkdirSync(pluginDataDir, { recursive: true })
+}
+
+function getPluginStoragePath(pluginId: string) {
+  return join(pluginDataDir, `${pluginId}.json`)
+}
+
+export function createSandbox(permissions: string[], pluginId: string) {
   const commands = new Map<string, Function>()
   const searchProviders = new Map<string, any>()
+  
+  const storagePath = getPluginStoragePath(pluginId)
   
   const api = {
     clipboard: hasPermission('clipboard') ? {
@@ -24,10 +37,29 @@ export function createSandbox(permissions: string[]) {
       showQuickPick: async (items: any[]) => null
     },
     
-    storage: {
-      get: async (key: string) => null,
-      set: async (key: string, value: any) => null
-    },
+    storage: hasPermission('storage') ? {
+      get: async (key?: string) => {
+        try {
+          if (!existsSync(storagePath)) return key ? undefined : {}
+          const data = JSON.parse(readFileSync(storagePath, 'utf-8'))
+          return key ? data[key] : data
+        } catch {
+          return key ? undefined : {}
+        }
+      },
+      set: async (key: string, value: any) => {
+        try {
+          let data = {}
+          if (existsSync(storagePath)) {
+            data = JSON.parse(readFileSync(storagePath, 'utf-8'))
+          }
+          data[key] = value
+          writeFileSync(storagePath, JSON.stringify(data, null, 2))
+        } catch (e) {
+          console.error('Storage set error:', e)
+        }
+      }
+    } : null,
     
     notification: hasPermission('notification') ? {
       show: (title: string, body: string) => new Notification({ title, body }).show()

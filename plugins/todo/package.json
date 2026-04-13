@@ -1,0 +1,10 @@
+{
+  "name": "todo",
+  "version": "1.0.0",
+  "displayName": "待办事项",
+  "description": "管理待办事项，支持添加、删除、完成标记",
+  "main": "index.js",
+  "keywords": ["todo", "task", "待办"],
+  "activationEvents": ["onKeyword:todo", "onKeyword:task"],
+  "permissions": ["notification", "storage"]
+}

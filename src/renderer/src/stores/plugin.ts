@@ -12,6 +12,12 @@ export const usePluginStore = defineStore('plugin', () => {
     isLoading.value = false
   }
 
+  async function reloadPlugins() {
+    isLoading.value = true
+    plugins.value = await (window as any).mqbox.plugin.reload()
+    isLoading.value = false
+  }
+
   async function enablePlugin(id: string) {
     await (window as any).mqbox.plugin.enable(id)
     const plugin = plugins.value.find(p => p.id === id)
@@ -24,5 +30,5 @@ export const usePluginStore = defineStore('plugin', () => {
     if (plugin) plugin.enabled = false
   }
 
-  return { plugins, isLoading, loadPlugins, enablePlugin, disablePlugin }
+  return { plugins, isLoading, loadPlugins, reloadPlugins, enablePlugin, disablePlugin }
 })

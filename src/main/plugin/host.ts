@@ -1,29 +1,62 @@
 import { loadPlugins, getPluginInfo } from './loader'
 import { createSandbox } from './sandbox'
-import type { PluginInfo } from '../../shared/types'
+import type { PluginInfo, PluginPanel, PluginPage } from '../../shared/types'
 
-const loadedPlugins = loadPlugins()
+let loadedPlugins: Map<string, { manifest: any; module: any }> | null = null
 const activePlugins = new Map<string, any>()
 const pluginContexts = new Map<string, any>()
+const pluginPanels = new Map<string, PluginPanel>()
+const pluginPages = new Map<string, PluginPage>()
+
+function getLoadedPlugins() {
+  if (!loadedPlugins) {
+    loadedPlugins = loadPlugins()
+  }
+  return loadedPlugins
+}
 
 export function initPlugins() {
-  console.log('Initializing plugins, loaded:', loadedPlugins.size)
-  for (const [id, plugin] of loadedPlugins) {
+  const plugins = getLoadedPlugins()
+  console.log('Initializing plugins, loaded:', plugins.size)
+  for (const [id, plugin] of plugins) {
     console.log(`Enabling plugin: ${id}`)
     enablePlugin(id)
   }
 }
 
+export function reloadPlugins() {
+  loadedPlugins = loadPlugins()
+  activePlugins.clear()
+  pluginContexts.clear()
+  pluginPanels.clear()
+  pluginPages.clear()
+  initPlugins()
+}
+
 export function listPlugins(): PluginInfo[] {
-  return Array.from(loadedPlugins.entries()).map(([id, { manifest }]) => 
-    getPluginInfo(id, manifest))
+  const plugins = getLoadedPlugins()
+  return Array.from(plugins.entries()).map(([id, { manifest }]) => {
+    const info = getPluginInfo(id, manifest)
+    info.enabled = activePlugins.has(id)
+    info.hasPanel = pluginPanels.has(id)
+    info.hasPage = pluginPages.has(id)
+    return info
+  })
+}
+
+export function getPluginPanels(): PluginPanel[] {
+  return Array.from(pluginPanels.values())
+}
+
+export function getPluginPage(pluginId: string): PluginPage | undefined {
+  return pluginPages.get(pluginId)
 }
 
 export function enablePlugin(id: string): boolean {
-  const plugin = loadedPlugins.get(id)
+  const plugin = loadedPlugins?.get(id)
   if (!plugin) return false
   
-  const sandbox = createSandbox(plugin.manifest.permissions)
+  const sandbox = createSandbox(plugin.manifest.permissions, id)
   const context = {
     registerCommand: (name: string, handler: Function) => {
       sandbox.commands.set(name, handler)
@@ -31,6 +64,14 @@ export function enablePlugin(id: string): boolean {
     registerSearchProvider: (provider: any) => {
       console.log(`Registered search provider: ${provider.keyword} for plugin ${id}`)
       sandbox.searchProviders.set(provider.keyword, provider)
+    },
+    registerPanel: (panel: PluginPanel) => {
+      console.log(`Registered panel for plugin ${id}`)
+      pluginPanels.set(id, { ...panel, pluginId: id })
+    },
+    registerPage: (page: PluginPage) => {
+      console.log(`Registered page for plugin ${id}`)
+      pluginPages.set(id, page)
     },
     clipboard: sandbox.api.clipboard,
     files: sandbox.api.files,
@@ -49,12 +90,14 @@ export function enablePlugin(id: string): boolean {
 }
 
 export function disablePlugin(id: string): boolean {
-  const plugin = loadedPlugins.get(id)
+  const plugin = loadedPlugins?.get(id)
   if (!plugin) return false
   
   plugin.module.deactivate?.()
   activePlugins.delete(id)
   pluginContexts.delete(id)
+  pluginPanels.delete(id)
+  pluginPages.delete(id)
   
   return true
 }

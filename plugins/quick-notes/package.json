@@ -6,5 +6,5 @@
   "main": "index.js",
   "keywords": ["note", "笔记"],
   "activationEvents": ["onKeyword:note", "onCommand:note"],
-  "permissions": ["files:read", "files:write"]
+  "permissions": ["notification", "storage"]
 }

@@ -77,7 +77,12 @@ function createWindow(type: WindowType): BrowserWindow {
   })
   
   loadView(win, config.view)
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    win.show()
+    if (type === 'search') {
+      win.webContents.send('search:clear')
+    }
+  })
   win.on('closed', () => { windows[type] = null })
   
   windows[type] = win
@@ -98,12 +103,12 @@ export function showWindow(type: WindowType): BrowserWindow | null {
   win.setSize(config.width, config.height)
   win.show()
   win.focus()
+  
+  if (type === 'search') {
+    win.webContents.send('search:clear')
+  }
+  
   return win
-}
-
-export function hideWindow(type: WindowType) {
-  const win = windows[type]
-  if (win) win.hide()
 }
 
 export function toggleWindow(type: WindowType): BrowserWindow | null {
@@ -114,6 +119,11 @@ export function toggleWindow(type: WindowType): BrowserWindow | null {
     return null
   }
   return showWindow(type)
+}
+
+export function hideWindow(type: WindowType) {
+  const win = windows[type]
+  if (win) win.hide()
 }
 
 export function closeWindow(type: WindowType) {

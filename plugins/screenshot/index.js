@@ -3,6 +3,25 @@ module.exports = {
     const screenshot = context.screenshot
     console.log('Screenshot plugin activated, screenshot API:', screenshot ? 'available' : 'null')
     
+    context.registerPanel({
+      id: 'screenshot-panel',
+      height: 86,
+      title: '截图工具',
+      icon: 'camera',
+      iconColor: '#28A745',
+      content: '快速截图',
+      actions: [
+        { id: 'region', label: '截图', icon: 'crop' }
+      ]
+    })
+    
+    context.registerPage({
+      title: '截图工具',
+      width: 400,
+      height: 300,
+      template: 'screenshot-options'
+    })
+
     context.registerCommand('region', async () => {
       console.log('Screenshot region command called')
       if (screenshot) {
@@ -62,6 +81,7 @@ module.exports = {
 
     context.registerSearchProvider({
       keyword: 'ss',
+      name: '截图工具',
       onSearch: async (query) => {
         return [
           { 

@@ -72,8 +72,22 @@ export const useSearchStore = defineStore('search', () => {
       if (parts.length >= 2) {
         const pluginId = result.pluginId || parts[0]
         const actionName = parts.slice(1).join(':')
+        
+        let args = result.actionArgs
+        if (args === undefined || args === null) {
+          args = []
+        } else if (typeof args === 'object') {
+          if (args.content) {
+            args = [args.content]
+          } else if (args.id) {
+            args = [args.id]
+          } else if (args.filter) {
+            args = [args.filter]
+          }
+        }
+        
         try {
-          await (window as any).mqbox.plugin.execute(pluginId, actionName, result.actionArgs)
+          await (window as any).mqbox.plugin.execute(pluginId, actionName, args)
         } catch (e) {
           console.error('Plugin execute error:', e)
         }
@@ -82,7 +96,14 @@ export const useSearchStore = defineStore('search', () => {
     }
   }
 
-  return { query, results, selectedIndex, isLoading, performSearch, selectNext, selectPrev, executeSelected }
+  function clearSearch() {
+    query.value = ''
+    results.value = []
+    selectedIndex.value = 0
+    isLoading.value = false
+  }
+
+  return { query, results, selectedIndex, isLoading, performSearch, selectNext, selectPrev, executeSelected, clearSearch }
 })
 
 function getFileIcon(ext: string): string {

@@ -11,7 +11,10 @@ const api = {
     enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
     disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
     execute: (id: string, action: string, args: any) => 
-      ipcRenderer.invoke('plugin:execute', id, action, args)
+      ipcRenderer.invoke('plugin:execute', id, action, args),
+    reload: () => ipcRenderer.invoke('plugin:reload'),
+    getPanels: () => ipcRenderer.invoke('plugin:get-panels'),
+    getPage: (id: string) => ipcRenderer.invoke('plugin:get-page', id)
   },
   config: {
     get: (key?: string) => ipcRenderer.invoke('config:get', key),
@@ -22,7 +25,12 @@ const api = {
     hide: () => ipcRenderer.send('window:hide'),
     minimize: () => ipcRenderer.send('window:minimize'),
     setSize: (width: number, height: number) => ipcRenderer.send('window:set-size', width, height),
-    openPluginManager: () => ipcRenderer.send('window:open-plugin-manager')
+    openPluginManager: () => ipcRenderer.send('window:open-plugin-manager'),
+    openSearch: (initialQuery?: string) => ipcRenderer.send('window:open-search', initialQuery),
+    openPluginPage: (pluginId: string) => ipcRenderer.send('window:open-plugin-page', pluginId),
+    on: (channel: string, callback: (...args: any[]) => void) => {
+      ipcRenderer.on(channel, (_, ...args) => callback(...args))
+    }
   },
   clipboard: {
     read: () => ipcRenderer.invoke('clipboard:read'),

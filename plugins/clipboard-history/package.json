@@ -6,7 +6,7 @@
   "main": "index.js",
   "keywords": ["cb", "clipboard"],
   "activationEvents": ["onKeyword:cb", "onKeyword:clipboard"],
-  "permissions": ["clipboard"],
+  "permissions": ["clipboard", "notification"],
   "config": {
     "maxHistory": { "type": "number", "title": "历史记录数量", "default": 100 },
     "autoCleanup": { "type": "boolean", "title": "自动清理", "default": true }

@@ -4,6 +4,48 @@ let clipboardInterval = null
 
 module.exports = {
   activate(context) {
+    context.registerPanel({
+      id: 'clipboard-panel',
+      height: 120,
+      title: '剪贴板历史',
+      icon: 'clipboard',
+      iconColor: '#0078D4',
+      content: `历史记录: ${history.length} 条`,
+      data: {
+        items: history.slice(0, 3).map(item => ({
+          text: item.content.substring(0, 30),
+          subtitle: new Date(item.time).toLocaleTimeString()
+        }))
+      },
+      actions: [
+        { id: 'clear', label: '清空', icon: 'trash' }
+      ]
+    })
+    
+    context.registerPage({
+      title: '剪贴板历史',
+      width: 500,
+      height: 400,
+      template: 'clipboard-history'
+    })
+
+    context.registerCommand('getPageData', async () => {
+      return {
+        history
+      }
+    })
+
+    context.registerCommand('copy', async (args) => {
+      if (context.clipboard && args?.content) {
+        await context.clipboard.writeText(args.content)
+        if (context.notification) {
+          context.notification.show('剪贴板', '已复制')
+        }
+        return { title: '已复制', subtitle: args.content.substring(0, 30) }
+      }
+      return { title: '复制失败', subtitle: '' }
+    })
+
     context.registerCommand('clipboard:show', async () => {
       return history.slice(0, 10).map(item => ({
         title: item.content.substring(0, 50),
@@ -13,8 +55,17 @@ module.exports = {
       }))
     })
 
+    context.registerCommand('clear', async () => {
+      history = []
+      if (context.notification) {
+        context.notification.show('剪贴板', '历史已清空')
+      }
+      return { title: '已清空', subtitle: '' }
+    })
+
     context.registerSearchProvider({
       keyword: 'cb',
+      name: '剪贴板历史',
       onSearch: async (query) => {
         const filtered = history.filter(item => 
           item.content.toLowerCase().includes(query.toLowerCase())
@@ -22,8 +73,10 @@ module.exports = {
         return filtered.slice(0, 10).map(item => ({
           title: item.content.substring(0, 50),
           subtitle: new Date(item.time).toLocaleString(),
+          icon: 'clipboard',
           action: 'clipboard:copy',
-          actionArgs: { content: item.content }
+          actionArgs: { content: item.content },
+          pluginId: 'clipboard-history'
         }))
       }
     })

@@ -1,6 +1,7 @@
 import { ipcMain, clipboard, BrowserWindow, shell } from 'electron'
 import { searchFiles } from '../search/everything'
-import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders } from '../plugin/host'
+import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders, reloadPlugins, getPluginPanels, getPluginPage } from '../plugin/host'
+import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
 import { captureAllScreens, captureScreen, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
@@ -37,6 +38,12 @@ export function setupIPC() {
   ipcMain.handle('plugin:disable', async (_, id: string) => disablePlugin(id))
   ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => 
     executePlugin(id, action, args))
+  ipcMain.handle('plugin:reload', async () => {
+    reloadPlugins()
+    return listPlugins()
+  })
+  ipcMain.handle('plugin:get-panels', async () => getPluginPanels())
+  ipcMain.handle('plugin:get-page', async (_, id: string) => getPluginPage(id))
 
   ipcMain.handle('config:get', async (_, key?: string) => 
     key ? getConfig()[key as keyof ReturnType<typeof getConfig>] : getConfig())
@@ -50,8 +57,25 @@ export function setupIPC() {
     if (win) win.setSize(width, height)
   })
 
+  ipcMain.on('window:open-search', (_, initialQuery?: string) => {
+    const win = showWindow('search')
+    if (win) {
+      win.webContents.send('search:clear')
+      if (initialQuery) {
+        setTimeout(() => win.webContents.send('search:set-query', initialQuery), 50)
+      }
+    }
+  })
+
   ipcMain.on('window:open-plugin-manager', () => {
     showWindow('pluginManager')
+  })
+
+  ipcMain.on('window:open-plugin-page', (_, pluginId: string) => {
+    const page = getPluginPage(pluginId)
+    if (page) {
+      showPluginPage(pluginId, page)
+    }
   })
 
   ipcMain.handle('clipboard:read', async () => clipboard.readText())
