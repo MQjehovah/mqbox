@@ -1,10 +1,23 @@
 {
-  "name": "calculator",
+  "name": "mqbox-plugin-calculator",
   "version": "1.0.0",
   "displayName": "计算器",
-  "description": "基础数学运算和单位换算",
-  "main": "index.js",
-  "keywords": ["calc", "="],
-  "activationEvents": ["onKeyword:calc", "onKeyword:="],
-  "permissions": ["clipboard", "notification"]
+  "description": "快速计算数学表达式",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "calculator",
+    "displayName": "计算器",
+    "keywords": ["calc", "="],
+    "permissions": ["clipboard"]
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
+  }
 }

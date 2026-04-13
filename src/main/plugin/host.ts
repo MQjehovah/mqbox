@@ -15,13 +15,22 @@ function getLoadedPlugins() {
   return loadedPlugins
 }
 
+function getPluginModule(plugin: any) {
+  // 支持新格式: export default { panel, page, activate }
+  if (plugin.module?.default) {
+    return plugin.module.default
+  }
+  // 支持旧格式: module.exports = { activate }
+  return plugin.module
+}
+
 export function initPlugins() {
   const plugins = getLoadedPlugins()
   console.log('Initializing plugins, loaded:', plugins.size)
-  for (const [id, plugin] of plugins) {
+  Array.from(plugins.entries()).forEach(([id, plugin]) => {
     console.log(`Enabling plugin: ${id}`)
     enablePlugin(id)
-  }
+  })
 }
 
 export function reloadPlugins() {
@@ -56,22 +65,25 @@ export function enablePlugin(id: string): boolean {
   const plugin = loadedPlugins?.get(id)
   if (!plugin) return false
   
-  const sandbox = createSandbox(plugin.manifest.permissions, id)
+  const module = getPluginModule(plugin)
+  const mqboxId = plugin.manifest.mqbox?.id || id
+  
+  const sandbox = createSandbox(plugin.manifest.mqbox?.permissions || plugin.manifest.permissions || [], mqboxId)
   const context = {
     registerCommand: (name: string, handler: Function) => {
       sandbox.commands.set(name, handler)
     },
     registerSearchProvider: (provider: any) => {
-      console.log(`Registered search provider: ${provider.keyword} for plugin ${id}`)
+      console.log(`Registered search provider: ${provider.keyword} for plugin ${mqboxId}`)
       sandbox.searchProviders.set(provider.keyword, provider)
     },
     registerPanel: (panel: PluginPanel) => {
-      console.log(`Registered panel for plugin ${id}`)
-      pluginPanels.set(id, { ...panel, pluginId: id })
+      console.log(`Registered panel for plugin ${mqboxId}`)
+      pluginPanels.set(mqboxId, { ...panel, pluginId: mqboxId, component: module.panel })
     },
     registerPage: (page: PluginPage) => {
-      console.log(`Registered page for plugin ${id}`)
-      pluginPages.set(id, page)
+      console.log(`Registered page for plugin ${mqboxId}`)
+      pluginPages.set(mqboxId, { ...page, component: module.page })
     },
     clipboard: sandbox.api.clipboard,
     files: sandbox.api.files,
@@ -82,9 +94,9 @@ export function enablePlugin(id: string): boolean {
     screenshot: sandbox.api.screenshot
   }
   
-  plugin.module.activate(context)
-  activePlugins.set(id, sandbox)
-  pluginContexts.set(id, context)
+  module.activate(context)
+  activePlugins.set(mqboxId, sandbox)
+  pluginContexts.set(mqboxId, context)
   
   return true
 }
@@ -93,11 +105,14 @@ export function disablePlugin(id: string): boolean {
   const plugin = loadedPlugins?.get(id)
   if (!plugin) return false
   
-  plugin.module.deactivate?.()
-  activePlugins.delete(id)
-  pluginContexts.delete(id)
-  pluginPanels.delete(id)
-  pluginPages.delete(id)
+  const module = getPluginModule(plugin)
+  const mqboxId = plugin.manifest.mqbox?.id || id
+  
+  module.deactivate?.()
+  activePlugins.delete(mqboxId)
+  pluginContexts.delete(mqboxId)
+  pluginPanels.delete(mqboxId)
+  pluginPages.delete(mqboxId)
   
   return true
 }
@@ -128,12 +143,20 @@ export async function executePlugin(id: string, action: string, args: any): Prom
   }
 }
 
+export function getPluginComponent(pluginId: string, type: 'panel' | 'page'): any {
+  const plugin = loadedPlugins?.get(pluginId)
+  if (!plugin) return null
+  
+  const module = getPluginModule(plugin)
+  return type === 'panel' ? module.panel : module.page
+}
+
 export function getSearchProviders(): Map<string, any> {
   const allProviders = new Map()
-  for (const [_, sandbox] of activePlugins) {
-    for (const [keyword, provider] of sandbox.searchProviders) {
+  Array.from(activePlugins.entries()).forEach(([_, sandbox]) => {
+    Array.from(sandbox.searchProviders.entries()).forEach(([keyword, provider]) => {
       allProviders.set(keyword, provider)
-    }
-  }
+    })
+  })
   return allProviders
 }

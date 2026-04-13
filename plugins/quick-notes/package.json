@@ -1,10 +1,23 @@
 {
-  "name": "quick-notes",
+  "name": "mqbox-plugin-quick-notes",
   "version": "1.0.0",
   "displayName": "快速笔记",
   "description": "快速记录和管理笔记",
-  "main": "index.js",
-  "keywords": ["note", "笔记"],
-  "activationEvents": ["onKeyword:note", "onCommand:note"],
-  "permissions": ["notification", "storage"]
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "quick-notes",
+    "displayName": "快速笔记",
+    "keywords": ["note"],
+    "permissions": ["storage", "notification"]
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
+  }
 }

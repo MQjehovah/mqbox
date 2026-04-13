@@ -1,7 +1,12 @@
-let lastResult = null
-let lastExpression = null
+import type { DefineComponent } from 'vue'
+import Panel from './Panel.vue'
+import Page from './Page.vue'
 
-function evaluate(expr) {
+let lastResult: number | null = null
+let lastExpression: string | null = null
+let history: { expr: string; result: number }[] = []
+
+function evaluate(expr: string): number | null {
   const sanitized = expr.replace(/[^0-9+\-*/().%\s]/g, '')
   if (sanitized.length === 0) return null
   try {
@@ -11,27 +16,11 @@ function evaluate(expr) {
   }
 }
 
-module.exports = {
-  activate(context) {
-    context.registerPanel({
-      id: 'calculator-panel',
-      height: 86,
-      title: '计算器',
-      icon: 'calculator',
-      iconColor: '#9C27B0',
-      content: lastResult ? `上次: ${lastResult}` : '快速计算',
-      data: {
-        text: '输入表达式计算'
-      }
-    })
-    
-    context.registerPage({
-      title: '计算器',
-      width: 300,
-      height: 400,
-      template: 'calculator'
-    })
-
+export default {
+  panel: Panel as DefineComponent<any, any, any>,
+  page: Page as DefineComponent<any, any, any>,
+  
+  activate(context: any) {
     context.registerCommand('getPanelData', async () => {
       return {
         lastResult,
@@ -43,24 +32,29 @@ module.exports = {
     context.registerCommand('getPageData', async () => {
       return {
         expression: lastExpression || '',
-        lastResult
+        lastResult,
+        history
       }
     })
 
-    context.registerCommand('calc', async (args) => {
-      let expr
+    context.registerCommand('calc', async (args: any) => {
+      let expr: string
       if (typeof args === 'object' && args.expr) {
         expr = args.expr
       } else if (Array.isArray(args)) {
         expr = args.join('')
       } else if (typeof args === 'string') {
         expr = args
+      } else {
+        return { title: '计算错误', subtitle: '无效表达式' }
       }
       
       const result = evaluate(expr)
       if (result !== null) {
         lastResult = result
         lastExpression = expr
+        history.unshift({ expr, result })
+        if (history.length > 20) history.pop()
         if (context.clipboard) {
           await context.clipboard.writeText(result.toString())
         }
@@ -69,10 +63,15 @@ module.exports = {
       return { title: '计算错误', subtitle: '无效表达式' }
     })
 
+    context.registerCommand('clearHistory', async () => {
+      history = []
+      return { success: true }
+    })
+
     context.registerSearchProvider({
       keyword: '=',
       name: '计算器',
-      onSearch: async (query) => {
+      onSearch: async (query: string) => {
         const result = evaluate(query)
         if (result !== null) {
           return [{ 

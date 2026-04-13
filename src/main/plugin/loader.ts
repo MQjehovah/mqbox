@@ -8,11 +8,17 @@ interface PluginManifest {
   version: string
   displayName: string
   description: string
-  main: string
+  main?: string
   icon?: string
-  keywords: string[]
-  activationEvents: string[]
-  permissions: string[]
+  keywords?: string[]
+  activationEvents?: string[]
+  permissions?: string[]
+  mqbox?: {
+    id: string
+    displayName: string
+    keywords: string[]
+    permissions: string[]
+  }
 }
 
 function getPluginsDir(): string {
@@ -44,10 +50,25 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
     
     try {
       const manifest: PluginManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-      const indexPath = join(pluginPath, manifest.main)
       
-      if (existsSync(indexPath)) {
-        const module = require(indexPath)
+      // 优先加载构建后的文件 (支持 .js 和 .mjs)
+      const distJsPath = join(pluginPath, 'dist', 'index.js')
+      const distMjsPath = join(pluginPath, 'dist', 'index.mjs')
+      const indexPath = manifest.main ? join(pluginPath, manifest.main) : join(pluginPath, 'index.js')
+      
+      let modulePath = null
+      if (existsSync(distJsPath)) {
+        modulePath = distJsPath
+      } else if (existsSync(distMjsPath)) {
+        modulePath = distMjsPath
+      } else if (existsSync(indexPath)) {
+        modulePath = indexPath
+      }
+      
+      if (modulePath) {
+        // 清除缓存以支持热更新
+        delete require.cache[require.resolve(modulePath)]
+        const module = require(modulePath)
         plugins.set(dir.name, { manifest, module })
         console.log(`Loaded plugin: ${dir.name}`)
       }
@@ -60,14 +81,15 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
 }
 
 export function getPluginInfo(id: string, manifest: PluginManifest): PluginInfo {
+  const mqbox = manifest.mqbox
   return {
-    id,
-    name: manifest.displayName,
+    id: mqbox?.id || id,
+    name: mqbox?.displayName || manifest.displayName || manifest.name,
     version: manifest.version,
     description: manifest.description,
     icon: manifest.icon,
     enabled: true,
-    keywords: manifest.keywords,
-    permissions: manifest.permissions
+    keywords: mqbox?.keywords || manifest.keywords || [],
+    permissions: mqbox?.permissions || manifest.permissions || []
   }
 }

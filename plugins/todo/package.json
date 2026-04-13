@@ -1,10 +1,23 @@
 {
-  "name": "todo",
+  "name": "mqbox-plugin-todo",
   "version": "1.0.0",
   "displayName": "待办事项",
-  "description": "管理待办事项，支持添加、删除、完成标记",
-  "main": "index.js",
-  "keywords": ["todo", "task", "待办"],
-  "activationEvents": ["onKeyword:todo", "onKeyword:task"],
-  "permissions": ["notification", "storage"]
+  "description": "管理待办事项和任务",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "todo",
+    "displayName": "待办事项",
+    "keywords": ["todo", "task"],
+    "permissions": ["storage", "notification"]
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
+  }
 }

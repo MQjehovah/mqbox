@@ -1,10 +1,23 @@
 {
-  "name": "screenshot",
+  "name": "mqbox-plugin-screenshot",
   "version": "1.0.0",
   "displayName": "截图工具",
-  "description": "快速截图、标注、分享",
-  "main": "index.js",
-  "keywords": ["ss", "screenshot"],
-  "activationEvents": ["onKeyword:ss", "onKeyword:screenshot"],
-  "permissions": ["clipboard", "notification", "screenshot"]
+  "description": "快速截图和标注",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "screenshot",
+    "displayName": "截图工具",
+    "keywords": ["ss"],
+    "permissions": ["screenshot", "notification"]
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
+  }
 }

@@ -41,6 +41,7 @@ export interface PluginPanel {
   content?: string
   data?: Record<string, any>
   actions?: { id: string; label?: string; icon?: string }[]
+  component?: any
 }
 
 export interface PluginPage {
@@ -49,6 +50,7 @@ export interface PluginPage {
   height?: number
   url?: string
   template?: string
+  component?: any
 }
 
 export interface QuickPickItem {

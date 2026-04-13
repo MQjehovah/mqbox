@@ -1,14 +1,23 @@
 {
-  "name": "clipboard-history",
+  "name": "mqbox-plugin-clipboard-history",
   "version": "1.0.0",
   "displayName": "剪贴板历史",
-  "description": "记录和管理剪贴板历史记录",
-  "main": "index.js",
-  "keywords": ["cb", "clipboard"],
-  "activationEvents": ["onKeyword:cb", "onKeyword:clipboard"],
-  "permissions": ["clipboard", "notification"],
-  "config": {
-    "maxHistory": { "type": "number", "title": "历史记录数量", "default": 100 },
-    "autoCleanup": { "type": "boolean", "title": "自动清理", "default": true }
+  "description": "记录和管理剪贴板历史",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "clipboard-history",
+    "displayName": "剪贴板历史",
+    "keywords": ["cb"],
+    "permissions": ["clipboard", "notification"]
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
   }
 }
