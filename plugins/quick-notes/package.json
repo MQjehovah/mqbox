@@ -1,0 +1,10 @@
+{
+  "name": "quick-notes",
+  "version": "1.0.0",
+  "displayName": "快速笔记",
+  "description": "快速记录和管理笔记",
+  "main": "index.js",
+  "keywords": ["note", "笔记"],
+  "activationEvents": ["onKeyword:note", "onCommand:note"],
+  "permissions": ["files:read", "files:write"]
+}

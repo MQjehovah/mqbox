@@ -1,0 +1,20 @@
+appId: com.mqbox.app
+productName: MQBox
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+win:
+  icon: resources/icon.png
+  target: nsis
+nsis:
+  oneClick: false
+  perMachine: true
+mac:
+  icon: resources/icon.png
+  target: dmg
+linux:
+  icon: resources/icon.png
+  target: deb

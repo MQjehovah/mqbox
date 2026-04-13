@@ -1,0 +1,10 @@
+{
+  "name": "screenshot",
+  "version": "1.0.0",
+  "displayName": "截图工具",
+  "description": "快速截图、标注、分享",
+  "main": "index.js",
+  "keywords": ["ss", "screenshot"],
+  "activationEvents": ["onKeyword:ss", "onKeyword:screenshot"],
+  "permissions": ["clipboard", "notification"]
+}
