@@ -3,33 +3,13 @@ interface DisplayInfo {
   bounds: { x: number; y: number; width: number; height: number }
   scaleFactor: number
   isPrimary: boolean
-}
-
-interface PluginPanel {
-  id: string
-  pluginId: string
-  height: number
-  type?: 'card' | 'list' | 'player' | 'input' | 'custom'
-  title?: string
-  icon?: string
-  iconColor?: string
-  content?: string
-  data?: Record<string, any>
-  actions?: { id: string; label?: string; icon?: string }[]
-}
-
-interface PluginPage {
-  title: string
-  width?: number
-  height?: number
-  url?: string
-  template?: string
+  label: string
 }
 
 export interface MqboxAPI {
   search: {
     query: (query: string) => Promise<any>
-    plugin: (keyword: string, query: string) => Promise<any[]>
+    plugin: (keyword: string, query: string) => Promise<any>
     getProviders: () => Promise<{ keyword: string; name: string }[]>
   }
   plugin: {
@@ -38,8 +18,8 @@ export interface MqboxAPI {
     disable: (id: string) => Promise<boolean>
     execute: (id: string, action: string, args: any) => Promise<any>
     reload: () => Promise<any>
-    getPanels: () => Promise<PluginPanel[]>
-    getPage: (id: string) => Promise<PluginPage | null>
+    getPanels: () => Promise<any>
+    getPage: (id: string) => Promise<any>
   }
   config: {
     get: (key?: string) => Promise<any>
@@ -50,8 +30,8 @@ export interface MqboxAPI {
     hide: () => void
     minimize: () => void
     setSize: (width: number, height: number) => void
-    openPluginManager: () => void
     openSearch: (initialQuery?: string) => void
+    openPluginManager: () => void
     openPluginPage: (pluginId: string) => void
     on: (channel: string, callback: (...args: any[]) => void) => void
   }
@@ -65,7 +45,6 @@ export interface MqboxAPI {
   }
   screenshot: {
     getAllScreens: () => Promise<{ displays: DisplayInfo[]; images: string[] }>
-    getScreen: (displayId?: number) => Promise<string | null>
     capture: (x: number, y: number, width: number, height: number) => Promise<string | null>
     start: () => void
     cancel: () => void

@@ -4,7 +4,7 @@ import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProvi
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
-import { captureAllScreens, captureScreen, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
+import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
 
 export function setupIPC() {
   ipcMain.handle('search:query', async (_, query: string) => {
@@ -86,10 +86,6 @@ export function setupIPC() {
 
   ipcMain.handle('screenshot:get-all-screens', async () => {
     return await captureAllScreens()
-  })
-
-  ipcMain.handle('screenshot:get-screen', async (_, displayId?: number) => {
-    return await captureScreen(displayId)
   })
 
   ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: number, height: number) => {

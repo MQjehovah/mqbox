@@ -42,7 +42,6 @@ const api = {
   },
   screenshot: {
     getAllScreens: () => ipcRenderer.invoke('screenshot:get-all-screens'),
-    getScreen: (displayId?: number) => ipcRenderer.invoke('screenshot:get-screen', displayId),
     capture: (x: number, y: number, width: number, height: number) => 
       ipcRenderer.invoke('screenshot:capture', x, y, width, height),
     start: () => ipcRenderer.send('screenshot:start'),

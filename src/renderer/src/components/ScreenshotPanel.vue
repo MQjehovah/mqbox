@@ -6,17 +6,20 @@ interface DisplayInfo {
   bounds: { x: number; y: number; width: number; height: number }
   scaleFactor: number
   isPrimary: boolean
+  label: string
 }
 
 const displays = ref<DisplayInfo[]>([])
-const screenImages = ref<string[]>([])
+const images = ref<string[]>([])
 const isSelecting = ref(false)
 const selection = ref({ x: 0, y: 0, width: 0, height: 0 })
 const startX = ref(0)
 const startY = ref(0)
 
 const virtualScreen = computed(() => {
-  if (displays.value.length === 0) return { left: 0, top: 0, width: 1920, height: 1080 }
+  if (displays.value.length === 0) {
+    return { left: 0, top: 0, width: 1920, height: 1080 }
+  }
   
   const bounds = displays.value.reduce((acc, d) => {
     const left = Math.min(acc.left, d.bounds.x)
@@ -35,37 +38,48 @@ const virtualScreen = computed(() => {
 })
 
 onMounted(async () => {
+  document.addEventListener('keydown', onKeyDown)
+  
   try {
     const result = await window.mqbox?.screenshot?.getAllScreens()
     if (result) {
       displays.value = result.displays
-      screenImages.value = result.images
+      images.value = result.images
+      console.log('Loaded screens:', {
+        displays: displays.value,
+        virtualScreen: virtualScreen.value
+      })
     }
   } catch (e) {
     console.error('Failed to get screens:', e)
   }
 })
 
-const getMouseScreenPosition = (e: MouseEvent) => {
-  const winBounds = { x: virtualScreen.value.left, y: virtualScreen.value.top }
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeyDown)
+})
+
+const getScreenPosition = (clientX: number, clientY: number) => {
   return {
-    x: e.clientX + winBounds.x,
-    y: e.clientY + winBounds.y
+    x: clientX + virtualScreen.value.left,
+    y: clientY + virtualScreen.value.top
   }
 }
 
 const onMouseDown = (e: MouseEvent) => {
+  e.preventDefault()
   isSelecting.value = true
-  const pos = getMouseScreenPosition(e)
+  const pos = getScreenPosition(e.clientX, e.clientY)
   startX.value = pos.x
   startY.value = pos.y
   selection.value = { x: pos.x, y: pos.y, width: 0, height: 0 }
+  console.log('Mouse down:', pos)
 }
 
 const onMouseMove = (e: MouseEvent) => {
   if (!isSelecting.value) return
   
-  const pos = getMouseScreenPosition(e)
+  const pos = getScreenPosition(e.clientX, e.clientY)
   
   const x = Math.min(startX.value, pos.x)
   const y = Math.min(startY.value, pos.y)
@@ -75,18 +89,22 @@ const onMouseMove = (e: MouseEvent) => {
   selection.value = { x, y, width, height }
 }
 
-const onMouseUp = async () => {
+const onMouseUp = async (e: MouseEvent) => {
   if (!isSelecting.value) return
+  e.preventDefault()
   isSelecting.value = false
+  
+  console.log('Mouse up, selection:', selection.value)
   
   if (selection.value.width > 5 && selection.value.height > 5) {
     try {
-      await window.mqbox?.screenshot?.capture(
+      const result = await window.mqbox?.screenshot?.capture(
         selection.value.x,
         selection.value.y,
         selection.value.width,
         selection.value.height
       )
+      console.log('Capture result:', result ? 'success' : 'failed')
     } catch (err) {
       console.error('Failed to capture:', err)
     }
@@ -99,105 +117,107 @@ const onKeyDown = (e: KeyboardEvent) => {
   }
 }
 
-const getDisplayStyle = (display: DisplayInfo) => {
+const getDisplayStyle = (display: DisplayInfo, index: number) => {
+  const left = display.bounds.x - virtualScreen.value.left
+  const top = display.bounds.y - virtualScreen.value.top
+  
+  console.log(`Display ${index} style:`, {
+    left,
+    top,
+    width: display.bounds.width,
+    height: display.bounds.height
+  })
+  
   return {
-    left: (display.bounds.x - virtualScreen.value.left) + 'px',
-    top: (display.bounds.y - virtualScreen.value.top) + 'px',
-    width: display.bounds.width + 'px',
-    height: display.bounds.height + 'px'
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${display.bounds.width}px`,
+    height: `${display.bounds.height}px`
   }
 }
 
-const getSelectionWindowStyle = computed(() => {
+const getSelectionStyle = computed(() => {
+  const left = selection.value.x - virtualScreen.value.left
+  const top = selection.value.y - virtualScreen.value.top
+  
   return {
-    left: (selection.value.x - virtualScreen.value.left) + 'px',
-    top: (selection.value.y - virtualScreen.value.top) + 'px',
-    width: selection.value.width + 'px',
-    height: selection.value.height + 'px'
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${selection.value.width}px`,
+    height: `${selection.value.height}px`
   }
-})
-
-onMounted(() => {
-  document.addEventListener('keydown', onKeyDown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', onKeyDown)
 })
 </script>
 
 <template>
   <div 
-    class="screenshot-panel w-full h-full bg-transparent cursor-crosshair"
+    class="screenshot-panel fixed inset-0 bg-transparent cursor-crosshair select-none overflow-hidden"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseUp"
+    @contextmenu.prevent
   >
     <div 
       v-for="(display, index) in displays" 
       :key="display.id"
-      class="display-container absolute"
-      :style="getDisplayStyle(display)"
+      class="screen-container absolute"
+      :style="getDisplayStyle(display, index)"
     >
       <img 
-        v-if="screenImages[index]" 
-        :src="screenImages[index]" 
-        class="w-full h-full object-fill opacity-30"
+        v-if="images[index]" 
+        :src="images[index]" 
+        class="w-full h-full object-cover opacity-40"
         draggable="false"
       />
-      <div class="display-label absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-        {{ display.isPrimary ? '主屏幕' : `屏幕 ${index + 1}` }}
-        <span class="ml-1">{{ display.bounds.width }}x{{ display.bounds.height }}</span>
+      <div class="display-label absolute top-[8px] left-[8px] bg-black/60 text-white text-[12px] px-[10px] py-[6px] rounded pointer-events-none">
+        {{ display.label }}
+        <span class="opacity-70 ml-[4px]">{{ display.bounds.width }}×{{ display.bounds.height }}</span>
       </div>
     </div>
     
     <div 
       v-if="isSelecting"
-      class="selection-box absolute border-2 border-[#00a8ff] pointer-events-none"
-      :style="getSelectionWindowStyle"
+      class="selection-area absolute border-[2px] border-[#00a8ff] pointer-events-none"
+      :style="getSelectionStyle"
     >
-      <div class="absolute inset-0 border bg-[#00a8ff]/20"></div>
-      <div class="dimension-label absolute -top-6 left-0 bg-[#00a8ff] text-white text-xs px-2 py-1 rounded">
-        {{ selection.width }} x {{ selection.height }}
+      <div class="absolute inset-0 bg-[#00a8ff]/20"></div>
+      <div class="size-label absolute -top-[28px] left-0 bg-[#00a8ff] text-white text-[12px] px-[10px] py-[4px] rounded whitespace-nowrap">
+        {{ selection.width }} × {{ selection.height }}
       </div>
     </div>
     
     <div 
       v-if="!isSelecting"
-      class="hint fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white text-sm px-4 py-2 rounded-lg pointer-events-none"
+      class="hint fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white text-[14px] px-[20px] py-[12px] rounded-lg pointer-events-none z-50"
     >
-      拖动鼠标选择截图区域，按 Esc 取消
+      拖动选择截图区域，按 Esc 取消
     </div>
     
-    <div class="mask absolute inset-0 bg-black/30 pointer-events-none"></div>
+    <div class="mask absolute inset-0 bg-black/40 pointer-events-none"></div>
   </div>
 </template>
 
 <style scoped>
 .screenshot-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  user-select: none;
-  overflow: hidden;
+  z-index: 9999;
 }
 
-.display-container {
+.screen-container {
   overflow: hidden;
+  z-index: 10;
 }
 
-.selection-box {
+.display-label {
+  z-index: 20;
+}
+
+.selection-area {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
   z-index: 100;
 }
 
-.dimension-label {
-  white-space: nowrap;
+.size-label {
   z-index: 101;
-}
-
-.display-label {
-  z-index: 10;
 }
 
 .mask {
