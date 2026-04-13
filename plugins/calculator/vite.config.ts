@@ -8,7 +8,7 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'CalculatorPlugin',
-      formats: ['es'],
+      formats: ['cjs'],
       fileName: 'index'
     },
     rollupOptions: {

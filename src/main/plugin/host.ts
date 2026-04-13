@@ -94,6 +94,24 @@ export function enablePlugin(id: string): boolean {
     screenshot: sandbox.api.screenshot
   }
   
+  // 自动注册 Vue 组件面板和页面
+  if (module.panel) {
+    console.log(`Auto-registered panel for plugin ${mqboxId}`)
+    pluginPanels.set(mqboxId, { 
+      id: `${mqboxId}-panel`, 
+      pluginId: mqboxId, 
+      height: 120,
+      component: module.panel 
+    })
+  }
+  if (module.page) {
+    console.log(`Auto-registered page for plugin ${mqboxId}`)
+    pluginPages.set(mqboxId, { 
+      title: plugin.manifest.mqbox?.displayName || plugin.manifest.displayName || mqboxId,
+      component: module.page 
+    })
+  }
+  
   module.activate(context)
   activePlugins.set(mqboxId, sandbox)
   pluginContexts.set(mqboxId, context)

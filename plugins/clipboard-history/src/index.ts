@@ -8,7 +8,7 @@ interface HistoryItem {
 }
 
 let history: HistoryItem[] = []
-let clipboardListener: any = null
+let clipboardInterval: any = null
 
 function formatTime(timestamp: number) {
   const date = new Date(timestamp)
@@ -40,13 +40,12 @@ export default {
     })
 
     context.registerCommand('copy', async (args: any) => {
-      if (args && args.content) {
+      if (args && args.content && context.clipboard) {
         try {
-          await navigator.clipboard.writeText(args.content)
-          context.showNotification?.({
-            title: '已复制',
-            body: args.content.slice(0, 50)
-          })
+          await context.clipboard.writeText(args.content)
+          if (context.notification) {
+            context.notification.show('已复制', args.content.slice(0, 50))
+          }
           return { success: true }
         } catch {
           return { success: false }
@@ -57,10 +56,9 @@ export default {
 
     context.registerCommand('clear', async () => {
       history = []
-      context.showNotification?.({
-        title: '已清空',
-        body: '剪贴板历史已清空'
-      })
+      if (context.notification) {
+        context.notification.show('已清空', '剪贴板历史已清空')
+      }
       return { success: true }
     })
 
@@ -91,18 +89,20 @@ export default {
       }
     })
 
-    clipboardListener = async () => {
-      try {
-        const text = await navigator.clipboard.readText()
-        if (text && !history.find(h => h.content === text)) {
-          history.unshift({ content: text, time: Date.now() })
-          if (history.length > 100) {
-            history = history.slice(0, 100)
+    // 使用 Electron clipboard API 监听剪贴板变化
+    if (context.clipboard) {
+      clipboardInterval = setInterval(async () => {
+        try {
+          const text = await context.clipboard.readText()
+          if (text && !history.find(h => h.content === text)) {
+            history.unshift({ content: text, time: Date.now() })
+            if (history.length > 100) {
+              history = history.slice(0, 100)
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }, 500)
     }
-    document.addEventListener('copy', clipboardListener)
 
     context.storage?.get('history').then((data: any) => {
       if (data && Array.isArray(data)) {
@@ -112,9 +112,9 @@ export default {
   },
 
   deactivate() {
-    if (clipboardListener) {
-      document.removeEventListener('copy', clipboardListener)
-      clipboardListener = null
+    if (clipboardInterval) {
+      clearInterval(clipboardInterval)
+      clipboardInterval = null
     }
   }
 }
