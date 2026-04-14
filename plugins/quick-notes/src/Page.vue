@@ -12,7 +12,8 @@ interface Props {
   data: {
     notes: Note[]
   }
-  execute: (action: string, args?: any) => Promise<any>
+  execute: (action: string, args?: unknown) => Promise<unknown>
+  close: () => void
 }
 
 const props = defineProps<Props>()

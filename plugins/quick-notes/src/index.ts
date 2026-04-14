@@ -1,4 +1,3 @@
-import type { DefineComponent } from 'vue'
 import Panel from './Panel.vue'
 import Page from './Page.vue'
 
@@ -16,8 +15,8 @@ function generateId(): string {
 }
 
 export default {
-  panel: Panel as DefineComponent<any, any, any>,
-  page: Page as DefineComponent<any, any, any>,
+  panel: Panel,
+  page: Page,
   
   activate(context: any) {
     context.registerCommand('getPanelData', async () => {

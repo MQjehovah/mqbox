@@ -10,17 +10,18 @@ const api = {
     list: () => ipcRenderer.invoke('plugin:list'),
     enable: (id: string) => ipcRenderer.invoke('plugin:enable', id),
     disable: (id: string) => ipcRenderer.invoke('plugin:disable', id),
-    execute: (id: string, action: string, args: any) => 
+    execute: (id: string, action: string, args: any) =>
       ipcRenderer.invoke('plugin:execute', id, action, args),
     reload: () => ipcRenderer.invoke('plugin:reload'),
     getPanels: () => ipcRenderer.invoke('plugin:get-panels'),
-    getPage: (id: string) => ipcRenderer.invoke('plugin:get-page', id)
+    getPage: (id: string) => ipcRenderer.invoke('plugin:get-page', id),
+    getDirName: (pluginId: string) => ipcRenderer.invoke('plugin:get-dir-name', pluginId)
   },
   config: {
     get: (key?: string) => ipcRenderer.invoke('config:get', key),
     set: (key: string, value: any) => ipcRenderer.invoke('config:set', key, value)
   },
-window: {
+  window: {
     show: () => ipcRenderer.send('window:show'),
     hide: () => ipcRenderer.send('window:hide'),
     minimize: () => ipcRenderer.send('window:minimize'),
@@ -45,7 +46,7 @@ window: {
   },
   screenshot: {
     getAllScreens: () => ipcRenderer.invoke('screenshot:get-all-screens'),
-    capture: (x: number, y: number, width: number, height: number) => 
+    capture: (x: number, y: number, width: number, height: number) =>
       ipcRenderer.invoke('screenshot:capture', x, y, width, height),
     start: () => ipcRenderer.send('screenshot:start'),
     cancel: () => ipcRenderer.send('screenshot:cancel')

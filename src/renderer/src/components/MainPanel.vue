@@ -1,23 +1,44 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { compile } from 'vue'
-import type { PluginInfo, PluginPanel } from '../../../shared/types'
+import type { PluginInfo, PluginPanel, PanelProps } from '../../../shared/types'
 
-const plugins = ref<PluginInfo[]>([])
+import TodoPanel from '@plugins/todo/src/Panel.vue'
+import CalculatorPanel from '@plugins/calculator/src/Panel.vue'
+import ScreenshotPanel from '@plugins/screenshot/src/Panel.vue'
+import ClipboardHistoryPanel from '@plugins/clipboard-history/src/Panel.vue'
+import QuickNotesPanel from '@plugins/quick-notes/src/Panel.vue'
+import PlayerPanel from '@plugins/player/src/Panel.vue'
+
+const pluginComponents: Record<string, any> = {
+  'todo': TodoPanel,
+  'calculator': CalculatorPanel,
+  'screenshot': ScreenshotPanel,
+  'clipboard-history': ClipboardHistoryPanel,
+  'quick-notes': QuickNotesPanel,
+  'player': PlayerPanel
+}
+
+const pluginList = ref<PluginInfo[]>([])
 const panels = ref<PluginPanel[]>([])
 const isLoading = ref(false)
-const panelData = ref<Record<string, any>>({})
+const panelData = ref<Record<string, unknown>>({})
 
 const loadPlugins = async () => {
   isLoading.value = true
   try {
-    plugins.value = await window.mqbox?.plugin.list() || []
+    console.log('Static components loaded:', Object.keys(pluginComponents))
+    pluginList.value = await window.mqbox?.plugin.list() || []
+    console.log('Plugin list:', pluginList.value.map(p => p.id))
     panels.value = await window.mqbox?.plugin.getPanels() || []
-    
+    console.log('Panels:', panels.value.map(p => p.pluginId))
+
     for (const panel of panels.value) {
       try {
         panelData.value[panel.pluginId] = await window.mqbox?.plugin.execute(panel.pluginId, 'getPanelData', {})
-      } catch (e) {}
+        console.log(`Panel data for ${panel.pluginId}:`, panelData.value[panel.pluginId])
+      } catch (e) {
+        console.error(`Failed to load panel data for ${panel.pluginId}:`, e)
+      }
     }
   } catch (e) {
     console.error('Failed to load plugins:', e)
@@ -25,7 +46,7 @@ const loadPlugins = async () => {
   isLoading.value = false
 }
 
-const enabledPlugins = computed(() => plugins.value.filter(p => p.enabled))
+const enabledPlugins = computed(() => pluginList.value.filter(p => p.enabled))
 
 const pluginColors: Record<string, string> = {
   'screenshot': '#28A745',
@@ -51,8 +72,12 @@ const openSearch = (keyword: string) => {
   window.mqbox?.window.openSearch(keyword)
 }
 
-const handlePanelAction = async (pluginId: string, actionId: string, args?: any) => {
-  await window.mqbox?.plugin.execute(pluginId, actionId, args || {})
+const executeCommand = async (pluginId: string, command: string, args?: unknown) => {
+  await window.mqbox?.plugin.execute(pluginId, command, args || {})
+  panelData.value[pluginId] = await window.mqbox?.plugin.execute(pluginId, 'getPanelData', {})
+}
+
+const refreshPanelData = async (pluginId: string) => {
   panelData.value[pluginId] = await window.mqbox?.plugin.execute(pluginId, 'getPanelData', {})
 }
 
@@ -85,47 +110,19 @@ const stopResize = () => {
   isResizing.value = false
 }
 
-const getPanelDynamicData = (panel: PluginPanel) => {
-  return panelData.value[panel.pluginId] || panel.data
+const getPanelProps = (panel: PluginPanel): PanelProps => ({
+  data: panelData.value[panel.pluginId] || {},
+  execute: (command: string, args?: unknown) => executeCommand(panel.pluginId, command, args),
+  openPage: () => openPluginPage(panel.pluginId),
+  refresh: () => refreshPanelData(panel.pluginId)
+})
+
+const getComponent = (pluginId: string) => {
+  return pluginComponents[pluginId] || null
 }
 
 const handlePluginReloaded = () => {
   loadPlugins()
-}
-
-const createPanelComponent = (panel: PluginPanel) => {
-  if (!panel.template) return null
-  
-  const execute = async (action: string, args?: any) => {
-    await handlePanelAction(panel.pluginId, action, args)
-  }
-  
-  const openPage = () => {
-    openPluginPage(panel.pluginId)
-  }
-  
-  const context = {
-    data: getPanelDynamicData(panel),
-    execute,
-    openPage,
-    plugin: {
-      id: panel.pluginId,
-      execute
-    }
-  }
-  
-  try {
-    const renderFn = compile(panel.template)
-    return {
-      render: renderFn,
-      setup() {
-        return context
-      }
-    }
-  } catch (e) {
-    console.error('Failed to compile panel template:', e)
-    return null
-  }
 }
 
 onMounted(() => {
@@ -138,7 +135,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('mousemove', doResize)
   document.removeEventListener('mouseup', stopResize)
-  window.mqbox?.window.removeListener('plugin:reloaded', handlePluginReloaded)
+  window.mqbox?.window.removeListener?.('plugin:reloaded', handlePluginReloaded)
 })
 </script>
 
@@ -184,167 +181,14 @@ onUnmounted(() => {
 
         <div v-else class="flex flex-col gap-[6px]">
           <template v-for="panel in panels" :key="panel.id">
-            <div v-if="panel.pluginId === 'todo'" 
-              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[8px] hover:shadow-md transition-shadow cursor-pointer"
-              @click="openPluginPage(panel.pluginId)">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-[8px]">
-                  <div class="w-[32px] h-[32px] rounded-lg bg-[#FFF3E0] flex items-center justify-center">
-                    <svg class="w-[18px] h-[18px] text-[#FF9800]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                    </svg>
-                  </div>
-                  <div class="flex flex-col gap-[1px]">
-                    <span class="text-[13px] text-[#1E1E1E] font-semibold">待办事项</span>
-                    <span class="text-[11px] text-[#999999]">{{ getPanelDynamicData(panel)?.pendingCount || 0 }} 个待完成</span>
-                  </div>
-                </div>
-                <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </div>
-              <div v-if="getPanelDynamicData(panel)?.items?.length" class="flex flex-col gap-[4px]">
-                <div v-for="(item, i) in getPanelDynamicData(panel).items.slice(0, 2)" :key="i" 
-                  class="flex items-center gap-[6px] py-[4px] px-[8px] rounded bg-[#F5F5F5]">
-                  <span class="text-[11px]">{{ item.icon }}</span>
-                  <span class="text-[11px] text-[#1E1E1E] truncate flex-1">{{ item.text }}</span>
-                  <span class="text-[10px] text-[#FF9800]">{{ item.due }}</span>
-                </div>
-              </div>
-              <div v-else class="text-[11px] text-[#666666] text-center py-[8px]">暂无待办</div>
-            </div>
-
-            <div v-else-if="panel.pluginId === 'screenshot'" 
-              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[8px]">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-[8px]">
-                  <div class="w-[32px] h-[32px] rounded-lg bg-[#E8F5E9] flex items-center justify-center">
-                    <svg class="w-[18px] h-[18px] text-[#28A745]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                      <circle cx="12" cy="13" r="4"/>
-                    </svg>
-                  </div>
-                  <span class="text-[13px] text-[#1E1E1E] font-semibold">截图工具</span>
-                </div>
-                <span v-if="getPanelDynamicData(panel)?.lastCapture" class="text-[10px] text-[#999999]">{{ getPanelDynamicData(panel)?.lastCapture }}</span>
-              </div>
-              <div class="flex gap-[6px]">
-                <button class="flex-1 h-[36px] rounded-md bg-[#28A745] flex items-center justify-center gap-[6px] hover:bg-[#218838]" @click.stop="handlePanelAction(panel.pluginId, 'region')">
-                  <svg class="w-[14px] h-[14px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                    <circle cx="12" cy="13" r="4"/>
-                  </svg>
-                  <span class="text-[12px] text-white">截图</span>
-                </button>
-                <button class="w-[36px] h-[36px] rounded-md bg-[#F5F5F5] flex items-center justify-center hover:bg-[#EBEBEB]" @click.stop="handlePanelAction(panel.pluginId, 'fullscreen')">
-                  <svg class="w-[14px] h-[14px] text-[#666666]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div v-else-if="panel.pluginId === 'calculator'"
-              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[8px]">
-              <div class="flex items-center gap-[8px]">
-                <div class="w-[32px] h-[32px] rounded-lg bg-[#F3E5F5] flex items-center justify-center">
-                  <svg class="w-[18px] h-[18px] text-[#9C27B0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/>
-                    <rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
-                  </svg>
-                </div>
-                <span class="text-[13px] text-[#1E1E1E] font-semibold">计算器</span>
-              </div>
-              <div class="flex gap-[6px]">
-                <input 
-                  type="text" 
-                  class="flex-1 h-[36px] rounded-md bg-[#F5F5F5] border-none px-[10px] text-[14px] outline-none"
-                  placeholder="计算表达式..."
-                  :value="getPanelDynamicData(panel)?.input || ''"
-                  @input="(e: InputEvent) => panelData[panel.pluginId] = { ...(panelData[panel.pluginId] || {}), input: (e.target as HTMLInputElement)?.value || '' }"
-                  @keyup.enter="(e: KeyboardEvent) => handlePanelAction(panel.pluginId, 'calc', { expr: (e.target as HTMLInputElement)?.value })"
-                />
-                <button 
-                  class="w-[36px] h-[36px] rounded-md bg-[#9C27B0] flex items-center justify-center hover:bg-[#7B1FA2]"
-                  @click.stop="handlePanelAction(panel.pluginId, 'calc', { expr: panelData[panel.pluginId]?.input })"
-                >
-                  <svg class="w-[14px] h-[14px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="m9 18 6-6-6-6"/>
-                  </svg>
-                </button>
-              </div>
-              <div v-if="getPanelDynamicData(panel)?.lastResult" class="text-[14px] text-[#9C27B0] font-mono">
-                = {{ getPanelDynamicData(panel)?.lastResult }}
-              </div>
-            </div>
-
-            <div v-else-if="panel.pluginId === 'clipboard-history'"
-              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[6px] hover:shadow-md transition-shadow cursor-pointer"
-              @click="openPluginPage(panel.pluginId)">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-[8px]">
-                  <div class="w-[32px] h-[32px] rounded-lg bg-[#E3F2FD] flex items-center justify-center">
-                    <svg class="w-[18px] h-[18px] text-[#0078D4]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
-                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                    </svg>
-                  </div>
-                  <div class="flex flex-col gap-[1px]">
-                    <span class="text-[13px] text-[#1E1E1E] font-semibold">剪贴板</span>
-                    <span class="text-[11px] text-[#999999]">{{ getPanelDynamicData(panel)?.count || 0 }} 条记录</span>
-                  </div>
-                </div>
-                <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </div>
-              <div v-if="getPanelDynamicData(panel)?.items?.length" class="flex flex-col gap-[3px]">
-                <div v-for="(item, i) in getPanelDynamicData(panel).items.slice(0, 3)" :key="i" 
-                  class="flex items-center gap-[6px] py-[3px] px-[6px] rounded bg-[#F5F5F5] truncate"
-                  @click.stop="handlePanelAction(panel.pluginId, 'copy', { content: item.content })">
-                  <svg class="w-[10px] h-[10px] text-[#0078D4]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                  </svg>
-                  <span class="text-[10px] text-[#1E1E1E] truncate flex-1">{{ item.text }}</span>
-                  <span class="text-[9px] text-[#999999]">{{ item.time }}</span>
-                </div>
-              </div>
-              <div v-else class="text-[11px] text-[#666666] text-center py-[4px]">无记录</div>
-            </div>
-
-            <div v-else-if="panel.pluginId === 'quick-notes'"
-              class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex flex-col gap-[8px] hover:shadow-md transition-shadow cursor-pointer"
-              @click="openPluginPage(panel.pluginId)">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-[8px]">
-                  <div class="w-[32px] h-[32px] rounded-lg bg-[#FFEBEE] flex items-center justify-center">
-                    <svg class="w-[18px] h-[18px] text-[#DC3545]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                  </div>
-                  <div class="flex flex-col gap-[1px]">
-                    <span class="text-[13px] text-[#1E1E1E] font-semibold">快速笔记</span>
-                    <span class="text-[11px] text-[#999999]">{{ getPanelDynamicData(panel)?.count || 0 }} 条笔记</span>
-                  </div>
-                </div>
-                <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </div>
-              <div v-if="getPanelDynamicData(panel)?.items?.length" class="flex flex-col gap-[4px]">
-                <div v-for="(item, i) in getPanelDynamicData(panel).items.slice(0, 2)" :key="i" 
-                  class="flex flex-col gap-[2px] py-[4px] px-[8px] rounded bg-[#F5F5F5]">
-                  <span class="text-[11px] text-[#1E1E1E] truncate">{{ item.text }}</span>
-                  <div class="flex gap-[4px]">
-                    <span v-for="tag in item.tags?.slice(0, 2)" :key="tag" class="text-[9px] text-[#DC3545]">#{{ tag }}</span>
-                  </div>
-                </div>
-              </div>
-<div v-else class="text-[11px] text-[#666666] text-center py-[8px]">暂无笔记</div>
-            </div>
-
-            <component v-else-if="panel.template" :is="createPanelComponent(panel)" />
+            <component
+              v-if="getComponent(panel.pluginId)"
+              :is="getComponent(panel.pluginId)"
+              :data="getPanelProps(panel).data"
+              :execute="getPanelProps(panel).execute"
+              :openPage="getPanelProps(panel).openPage"
+              :refresh="getPanelProps(panel).refresh"
+            />
 
             <div v-else
               class="rounded-lg bg-[#F5F5F5] border border-[#E0E0E0] p-[10px] flex flex-col gap-[6px] hover:bg-[#EBEBEB] cursor-pointer"
@@ -357,17 +201,16 @@ onUnmounted(() => {
                       <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
                     </svg>
                   </div>
-                  <span class="text-[13px] text-[#1E1E1E] font-medium">{{ panel.title || panel.pluginId }}</span>
+                  <span class="text-[13px] text-[#1E1E1E] font-medium">{{ panel.pluginId }}</span>
                 </div>
                 <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="m9 18 6-6-6-6"/>
                 </svg>
               </div>
-              <div v-if="panel.content" class="text-[11px] text-[#666666]">{{ panel.content }}</div>
             </div>
           </template>
 
-          <div v-for="plugin in enabledPlugins.filter(p => !panels.some(panel => panel.pluginId === p.id))" :key="plugin.id" 
+          <div v-for="plugin in enabledPlugins.filter(p => !panels.some(panel => panel.pluginId === p.id))" :key="plugin.id"
             class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex items-center gap-[8px] hover:shadow-md transition-shadow cursor-pointer"
             @click="plugin.hasPage ? openPluginPage(plugin.id) : openSearch(plugin.keywords[0])">
             <div class="w-[32px] h-[32px] rounded-lg flex items-center justify-center" :style="{ background: getPluginColor(plugin.id) + '20' }">

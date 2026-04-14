@@ -1,24 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { compile, defineComponent } from 'vue'
+import { ref, onMounted } from 'vue'
+import type { PageProps } from '../../../shared/types'
 
 const pluginId = ref('')
-const pageData = ref<any>(null)
-const pluginData = ref<any>(null)
+const pageComponent = ref<any>(null)
+const pageData = ref<{ title?: string; width?: number; height?: number } | null>(null)
+const pluginData = ref<unknown>(null)
 const isLoading = ref(true)
 
 const handleClose = () => {
   window.mqbox?.window.hide()
 }
 
-const isCustomTemplate = computed(() => {
-  return pageData.value?.template && !pageData.value?.url
-})
-
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const view = params.get('view') || ''
-  
+
   if (view.startsWith('plugin-page:')) {
     pluginId.value = view.replace('plugin-page:', '')
     await loadPage()
@@ -28,49 +25,32 @@ onMounted(async () => {
 const loadPage = async () => {
   isLoading.value = true
   try {
-    pageData.value = await window.mqbox?.plugin.getPage(pluginId.value)
-    
-    if (pageData.value?.template) {
-      pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
+    const dirName = await window.mqbox?.plugin.getDirName(pluginId.value)
+    if (dirName) {
+      const module = await import(`../../../plugins/${dirName}/src/index.ts`)
+      const pluginModule = module.default || module
+      if (pluginModule.page) {
+        pageComponent.value = pluginModule.page
+      }
     }
+    pageData.value = await window.mqbox?.plugin.getPage(pluginId.value)
+    pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
   } catch (e) {
     console.error('Failed to load page:', e)
   }
   isLoading.value = false
 }
 
-const executeAction = async (action: string, args?: any) => {
-  await window.mqbox?.plugin.execute(pluginId.value, action, args)
+const executeCommand = async (command: string, args?: unknown) => {
+  await window.mqbox?.plugin.execute(pluginId.value, command, args)
   pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
 }
 
-const createPageComponent = () => {
-  if (!pageData.value?.template) return null
-  
-  const context = {
-    data: pluginData.value || {},
-    execute: executeAction,
-    plugin: {
-      id: pluginId.value,
-      execute: executeAction
-    }
-  }
-  
-  try {
-    const renderFn = compile(pageData.value.template)
-    return defineComponent({
-      setup() {
-        return context
-      },
-      render: renderFn
-    })
-  } catch (e) {
-    console.error('Failed to compile page template:', e)
-    return defineComponent({
-      render: () => 'Template compilation error'
-    })
-  }
-}
+const getPageProps = (): PageProps => ({
+  data: pluginData.value || {},
+  execute: executeCommand,
+  close: handleClose
+})
 </script>
 
 <template>
@@ -86,16 +66,20 @@ const createPageComponent = () => {
           </button>
         </div>
       </div>
-      
+
       <div class="flex-1 overflow-auto bg-white">
         <div v-if="isLoading" class="flex items-center justify-center h-full">
           <span class="text-[14px] text-[#666666]">加载中...</span>
         </div>
-        
-        <webview v-else-if="pageData?.url" :src="pageData.url" class="w-full h-full border-none" style="background: white"></webview>
-        
-        <component v-else-if="isCustomTemplate" :is="createPageComponent()" />
-        
+
+        <component
+          v-else-if="pageComponent"
+          :is="pageComponent"
+          :data="getPageProps().data"
+          :execute="getPageProps().execute"
+          :close="getPageProps().close"
+        />
+
         <div v-else class="flex items-center justify-center h-full">
           <span class="text-[14px] text-[#666666]">插件页面未配置</span>
         </div>
@@ -107,9 +91,5 @@ const createPageComponent = () => {
 <style scoped>
 .plugin-page-container {
   background: transparent;
-}
-
-webview {
-  background: white;
 }
 </style>

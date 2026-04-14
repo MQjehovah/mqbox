@@ -1,12 +1,15 @@
 import { ipcMain, clipboard, BrowserWindow, shell } from 'electron'
 import { searchFiles } from '../search/everything'
-import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders, reloadPlugins, getPluginPanels, getPluginPage } from '../plugin/host'
+import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders, reloadPlugins, getPluginPanels, getPluginPage, getPluginConfig, getPluginDirName } from '../plugin/host'
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
 import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
+import { startHotReload } from '../plugin/loader'
 
 export function setupIPC() {
+  startHotReload()
+
   ipcMain.handle('search:query', async (_, query: string) => {
     return await searchFiles(query)
   })
@@ -36,11 +39,11 @@ export function setupIPC() {
   ipcMain.handle('plugin:list', async () => listPlugins())
   ipcMain.handle('plugin:enable', async (_, id: string) => enablePlugin(id))
   ipcMain.handle('plugin:disable', async (_, id: string) => disablePlugin(id))
-  ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => 
+  ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) =>
     executePlugin(id, action, args))
-ipcMain.handle('plugin:reload', async () => {
+  ipcMain.handle('plugin:reload', async () => {
     reloadPlugins()
-    const mainWindow = BrowserWindow.getAllWindows().find(w => 
+    const mainWindow = BrowserWindow.getAllWindows().find(w =>
       w.webContents.getURL().includes('view=main')
     )
     if (mainWindow) {
@@ -50,8 +53,10 @@ ipcMain.handle('plugin:reload', async () => {
   })
   ipcMain.handle('plugin:get-panels', async () => getPluginPanels())
   ipcMain.handle('plugin:get-page', async (_, id: string) => getPluginPage(id))
+  ipcMain.handle('plugin:get-config', async (_, id: string) => getPluginConfig(id))
+  ipcMain.handle('plugin:get-dir-name', async (_, id: string) => getPluginDirName(id))
 
-  ipcMain.handle('config:get', async (_, key?: string) => 
+  ipcMain.handle('config:get', async (_, key?: string) =>
     key ? getConfig()[key as keyof ReturnType<typeof getConfig>] : getConfig())
   ipcMain.handle('config:set', async (_, key: string, value: any) => setConfig(key, value))
 

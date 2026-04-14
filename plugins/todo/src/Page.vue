@@ -14,10 +14,9 @@ interface Props {
   data: {
     todos: Todo[]
     newTodoText: string
-    getPriorityColor: (priority: string) => string
-    formatDueDate: (dueDate: string | null) => string
   }
-  execute: (action: string, args?: any) => Promise<any>
+  execute: (action: string, args?: unknown) => Promise<unknown>
+  close: () => void
 }
 
 const props = defineProps<Props>()
@@ -25,6 +24,32 @@ const newTodoText = ref(props.data.newTodoText || '')
 
 const pendingTodos = computed(() => props.data.todos.filter(t => !t.completed))
 const completedTodos = computed(() => props.data.todos.filter(t => t.completed))
+
+function getPriorityColor(priority: string) {
+  if (priority === 'high') return '#E53935'
+  if (priority === 'low') return '#4CAF50'
+  return '#FF9800'
+}
+
+function formatDueDate(dueDate: string | null) {
+  if (!dueDate) return ''
+  const today = new Date().toISOString().split('T')[0]
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+  
+  if (dueDate === today) return '今天'
+  if (dueDate === tomorrowStr) return '明天'
+  
+  const due = new Date(dueDate)
+  const now = new Date()
+  const diff = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  
+  if (diff < 0) return `已过期${Math.abs(diff)}天`
+  if (diff === 0) return '今天'
+  if (diff === 1) return '明天'
+  return `${diff}天后`
+}
 
 const handleAdd = () => {
   if (newTodoText.value.trim()) {
@@ -67,11 +92,11 @@ const handleAdd = () => {
         >
           <button 
             class="w-6 h-6 rounded-full border-2 flex items-center justify-center hover:bg-orange-500"
-            :style="{ borderColor: data.getPriorityColor(todo.priority) }"
+            :style="{ borderColor: getPriorityColor(todo.priority) }"
             @click="execute('done', { id: todo.id })"
           ></button>
           <span class="flex-1 text-sm text-gray-800">{{ todo.text }}</span>
-          <span v-if="todo.dueDate" class="text-xs text-orange-500">{{ data.formatDueDate(todo.dueDate) }}</span>
+          <span v-if="todo.dueDate" class="text-xs text-orange-500">{{ formatDueDate(todo.dueDate) }}</span>
           <button 
             class="w-6 h-6 rounded flex items-center justify-center hover:bg-orange-100"
             @click="execute('delete', { id: todo.id })"

@@ -17,8 +17,8 @@ interface Props {
     playlist: Track[]
     playMode: 'sequence' | 'loop' | 'shuffle'
   }
-  execute: (action: string, args?: any) => Promise<any>
-  formatTime?: (seconds: number) => string
+  execute: (action: string, args?: unknown) => Promise<unknown>
+  close: () => void
 }
 
 const props = defineProps<Props>()
@@ -28,8 +28,7 @@ const progress = computed(() => {
   return (props.data.currentTime / props.data.duration) * 100
 })
 
-const formatTime = (seconds: number) => {
-  if (props.formatTime) return props.formatTime(seconds)
+function formatTime(seconds: number) {
   if (!seconds || isNaN(seconds)) return '0:00'
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)

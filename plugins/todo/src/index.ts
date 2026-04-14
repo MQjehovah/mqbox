@@ -1,6 +1,6 @@
-import type { DefineComponent } from 'vue'
 import Panel from './Panel.vue'
 import Page from './Page.vue'
+import type { PluginModule, PluginContext } from '../../../shared/types'
 
 let todos: any[] = []
 
@@ -67,10 +67,10 @@ function formatDueDate(dueDate: string | null) {
 }
 
 export default {
-  panel: Panel as DefineComponent<any, any, any>,
-  page: Page as DefineComponent<any, any, any>,
+  panel: Panel,
+  page: Page,
   
-  async activate(context: any) {
+  async activate(context: PluginContext) {
     if (context.storage) {
       const saved = await context.storage.get('todos')
       if (saved && Array.isArray(saved)) {
@@ -83,18 +83,14 @@ export default {
       return {
         pendingCount: pending.length,
         todos,
-        items: pending.slice(0, 3),
-        getPriorityColor,
-        formatDueDate
+        items: pending.slice(0, 3)
       }
     })
 
     context.registerCommand('getPageData', async () => {
       return {
         todos,
-        newTodoText: '',
-        getPriorityColor,
-        formatDueDate
+        newTodoText: ''
       }
     })
 

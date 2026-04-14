@@ -7,8 +7,9 @@ interface Props {
     lastExpression: string | null
     input: string
   }
-  execute: (action: string, args?: any) => Promise<any>
+  execute: (action: string, args?: unknown) => Promise<unknown>
   openPage: () => void
+  refresh: () => Promise<void>
 }
 
 const props = defineProps<Props>()

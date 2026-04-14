@@ -12,7 +12,8 @@ interface Props {
     lastResult: number | null
     history: HistoryItem[]
   }
-  execute: (action: string, args?: any) => Promise<any>
+  execute: (action: string, args?: unknown) => Promise<unknown>
+  close: () => void
 }
 
 const props = defineProps<Props>()

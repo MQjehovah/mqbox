@@ -14,17 +14,42 @@ interface Props {
     pendingCount: number
     todos: Todo[]
     items: Todo[]
-    getPriorityColor: (priority: string) => string
-    formatDueDate: (dueDate: string | null) => string
   }
-  execute: (action: string, args?: any) => Promise<any>
+  execute: (action: string, args?: unknown) => Promise<unknown>
   openPage: () => void
+  refresh: () => Promise<void>
 }
 
 const props = defineProps<Props>()
 
 const pendingTodos = computed(() => props.data.todos.filter(t => !t.completed))
 const completedTodos = computed(() => props.data.todos.filter(t => t.completed))
+
+function getPriorityColor(priority: string) {
+  if (priority === 'high') return '#E53935'
+  if (priority === 'low') return '#4CAF50'
+  return '#FF9800'
+}
+
+function formatDueDate(dueDate: string | null) {
+  if (!dueDate) return ''
+  const today = new Date().toISOString().split('T')[0]
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+  
+  if (dueDate === today) return '今天'
+  if (dueDate === tomorrowStr) return '明天'
+  
+  const due = new Date(dueDate)
+  const now = new Date()
+  const diff = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  
+  if (diff < 0) return `已过期${Math.abs(diff)}天`
+  if (diff === 0) return '今天'
+  if (diff === 1) return '明天'
+  return `${diff}天后`
+}
 </script>
 
 <template>
@@ -55,9 +80,9 @@ const completedTodos = computed(() => props.data.todos.filter(t => t.completed))
         class="flex items-center gap-1.5 py-1 px-2 rounded bg-gray-100 cursor-pointer hover:bg-gray-200"
         @click="execute('done', { id: item.id })"
       >
-        <div class="w-1.5 h-1.5 rounded-full" :style="{ background: data.getPriorityColor(item.priority) }"></div>
+        <div class="w-1.5 h-1.5 rounded-full" :style="{ background: getPriorityColor(item.priority) }"></div>
         <span class="text-xs text-gray-800 truncate flex-1">{{ item.text }}</span>
-        <span v-if="item.dueDate" class="text-xs text-orange-500">{{ data.formatDueDate(item.dueDate) }}</span>
+        <span v-if="item.dueDate" class="text-xs text-orange-500">{{ formatDueDate(item.dueDate) }}</span>
       </div>
     </div>
     <div v-else class="text-xs text-gray-500 text-center py-2">暂无待办</div>

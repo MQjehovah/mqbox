@@ -65,7 +65,8 @@ export const useSearchStore = defineStore('search', () => {
     if (!result) return
 
     if (result.type === 'file') {
-      await (window as any).mqbox.file.open(result.actionArgs?.path)
+      const args = result.actionArgs as { path?: string } | undefined
+      await (window as any).mqbox.file.open(args?.path)
       (window as any).mqbox.window.hide()
     } else if (result.type === 'plugin' && result.action) {
       const parts = result.action.split(':')
@@ -77,12 +78,13 @@ export const useSearchStore = defineStore('search', () => {
         if (args === undefined || args === null) {
           args = []
         } else if (typeof args === 'object') {
-          if (args.content) {
-            args = [args.content]
-          } else if (args.id) {
-            args = [args.id]
-          } else if (args.filter) {
-            args = [args.filter]
+          const argsObj = args as Record<string, unknown>
+          if (argsObj.content) {
+            args = [argsObj.content]
+          } else if (argsObj.id) {
+            args = [argsObj.id]
+          } else if (argsObj.filter) {
+            args = [argsObj.filter]
           }
         }
         

@@ -20,6 +20,7 @@ export interface MqboxAPI {
     reload: () => Promise<any>
     getPanels: () => Promise<any>
     getPage: (id: string) => Promise<any>
+    getDirName: (pluginId: string) => Promise<string | undefined>
   }
   config: {
     get: (key?: string) => Promise<any>

@@ -1,12 +1,12 @@
 import { loadPlugins, getPluginInfo } from './loader'
 import { createSandbox } from './sandbox'
-import type { PluginInfo, PluginPanel, PluginPage } from '../../shared/types'
+import type { PluginInfo, PluginPanel, PluginPage, PluginModule, PluginContext, PluginConfig } from '../../shared/types'
 
 let loadedPlugins: Map<string, { manifest: any; module: any }> | null = null
-const activePlugins = new Map<string, any>()
-const pluginContexts = new Map<string, any>()
+const activePlugins = new Map<string, { sandbox: any; context: PluginContext }>()
 const pluginPanels = new Map<string, PluginPanel>()
 const pluginPages = new Map<string, PluginPage>()
+const pluginConfigs = new Map<string, PluginConfig>()
 
 function getLoadedPlugins() {
   if (!loadedPlugins) {
@@ -15,40 +15,45 @@ function getLoadedPlugins() {
   return loadedPlugins
 }
 
-function getPluginModule(plugin: any) {
-  // 支持新格式: export default { panel, page, activate }
+function getPluginModule(plugin: any): PluginModule | null {
+  if (!plugin.module) return null
   if (plugin.module?.default) {
     return plugin.module.default
   }
-  // 支持旧格式: module.exports = { activate }
   return plugin.module
+}
+
+function resolvePluginId(dirName: string, manifest: any): string {
+  return manifest.mqbox?.id || dirName
 }
 
 export function initPlugins() {
   const plugins = getLoadedPlugins()
   console.log('Initializing plugins, loaded:', plugins.size)
-  Array.from(plugins.entries()).forEach(([id, plugin]) => {
-    console.log(`Enabling plugin: ${id}`)
-    enablePlugin(id)
+  Array.from(plugins.entries()).forEach(([dirName]) => {
+    console.log(`Enabling plugin: ${dirName}`)
+    enablePlugin(dirName)
   })
 }
 
 export function reloadPlugins() {
   loadedPlugins = loadPlugins()
   activePlugins.clear()
-  pluginContexts.clear()
   pluginPanels.clear()
   pluginPages.clear()
+  pluginConfigs.clear()
   initPlugins()
 }
 
 export function listPlugins(): PluginInfo[] {
   const plugins = getLoadedPlugins()
-  return Array.from(plugins.entries()).map(([id, { manifest }]) => {
-    const info = getPluginInfo(id, manifest)
+  return Array.from(plugins.entries()).map(([dirName, { manifest }]) => {
+    const id = resolvePluginId(dirName, manifest)
+    const info = getPluginInfo(dirName, manifest)
     info.enabled = activePlugins.has(id)
     info.hasPanel = pluginPanels.has(id)
     info.hasPage = pluginPages.has(id)
+    info.hasConfig = pluginConfigs.has(id)
     return info
   })
 }
@@ -61,96 +66,112 @@ export function getPluginPage(pluginId: string): PluginPage | undefined {
   return pluginPages.get(pluginId)
 }
 
-export function enablePlugin(id: string): boolean {
-  const plugin = loadedPlugins?.get(id)
+export function getPluginConfig(pluginId: string): PluginConfig | undefined {
+  return pluginConfigs.get(pluginId)
+}
+
+export function getPluginDirName(pluginId: string): string | undefined {
+  const plugins = getLoadedPlugins()
+  for (const [dirName, { manifest }] of plugins.entries()) {
+    const id = resolvePluginId(dirName, manifest)
+    if (id === pluginId) return dirName
+  }
+  return undefined
+}
+
+export function enablePlugin(dirName: string): boolean {
+  const plugin = loadedPlugins?.get(dirName)
   if (!plugin) return false
-  
+
   const module = getPluginModule(plugin)
-  const mqboxId = plugin.manifest.mqbox?.id || id
-  
-  const sandbox = createSandbox(plugin.manifest.mqbox?.permissions || plugin.manifest.permissions || [], mqboxId)
-  const context = {
-    registerCommand: (name: string, handler: Function) => {
+  const pluginId = resolvePluginId(dirName, plugin.manifest)
+  const permissions = plugin.manifest.mqbox?.permissions || plugin.manifest.permissions || []
+  const info = getPluginInfo(dirName, plugin.manifest)
+
+  const sandbox = createSandbox(permissions, pluginId)
+
+  const context: PluginContext = {
+    plugin: info,
+    registerCommand: (name: string, handler) => {
       sandbox.commands.set(name, handler)
     },
-    registerSearchProvider: (provider: any) => {
-      console.log(`Registered search provider: ${provider.keyword} for plugin ${mqboxId}`)
+    registerSearchProvider: (provider) => {
+      console.log(`Registered search provider: ${provider.keyword} for plugin ${pluginId}`)
       sandbox.searchProviders.set(provider.keyword, provider)
     },
-    registerPanel: (panel: PluginPanel) => {
-      console.log(`Registered panel for plugin ${mqboxId}`)
-      pluginPanels.set(mqboxId, { ...panel, pluginId: mqboxId, component: module.panel })
-    },
-    registerPage: (page: PluginPage) => {
-      console.log(`Registered page for plugin ${mqboxId}`)
-      pluginPages.set(mqboxId, { ...page, component: module.page })
-    },
-    clipboard: sandbox.api.clipboard,
-    files: sandbox.api.files,
-    ui: sandbox.api.ui,
     storage: sandbox.api.storage,
+    clipboard: sandbox.api.clipboard,
     notification: sandbox.api.notification,
     shell: sandbox.api.shell,
+    files: sandbox.api.files,
     screenshot: sandbox.api.screenshot
   }
-  
-  // 自动注册 Vue 组件面板和页面
-  if (module.panel) {
-    console.log(`Auto-registered panel for plugin ${mqboxId}`)
-    pluginPanels.set(mqboxId, { 
-      id: `${mqboxId}-panel`, 
-      pluginId: mqboxId, 
-      height: 120,
-      component: module.panel 
+
+  const hasPanel = module?.panel || plugin.manifest.mqbox?.hasPanel !== false
+  const hasPage = module?.page || plugin.manifest.mqbox?.hasPage !== false
+  const hasConfig = module?.config || plugin.manifest.mqbox?.hasConfig === true
+
+  if (hasPanel) {
+    console.log(`Registered panel slot for plugin ${pluginId}`)
+    pluginPanels.set(pluginId, {
+      id: `${pluginId}-panel`,
+      pluginId,
+      height: 120
     })
   }
-  if (module.page) {
-    console.log(`Auto-registered page for plugin ${mqboxId}`)
-    pluginPages.set(mqboxId, { 
-      title: plugin.manifest.mqbox?.displayName || plugin.manifest.displayName || mqboxId,
-      component: module.page 
+
+  if (hasPage) {
+    console.log(`Registered page slot for plugin ${pluginId}`)
+    pluginPages.set(pluginId, {
+      title: plugin.manifest.mqbox?.displayName || plugin.manifest.displayName || pluginId
     })
   }
-  
-  module.activate(context)
-  activePlugins.set(mqboxId, sandbox)
-  pluginContexts.set(mqboxId, context)
-  
+
+  if (hasConfig) {
+    console.log(`Registered config slot for plugin ${pluginId}`)
+    pluginConfigs.set(pluginId, {})
+  }
+
+  if (module?.activate) {
+    module.activate(context)
+  }
+  activePlugins.set(pluginId, { sandbox, context })
+
   return true
 }
 
-export function disablePlugin(id: string): boolean {
-  const plugin = loadedPlugins?.get(id)
+export function disablePlugin(dirName: string): boolean {
+  const plugin = loadedPlugins?.get(dirName)
   if (!plugin) return false
-  
+
+  const pluginId = resolvePluginId(dirName, plugin.manifest)
   const module = getPluginModule(plugin)
-  const mqboxId = plugin.manifest.mqbox?.id || id
-  
-  module.deactivate?.()
-  activePlugins.delete(mqboxId)
-  pluginContexts.delete(mqboxId)
-  pluginPanels.delete(mqboxId)
-  pluginPages.delete(mqboxId)
-  
+
+  module?.deactivate?.()
+  activePlugins.delete(pluginId)
+  pluginPanels.delete(pluginId)
+  pluginPages.delete(pluginId)
+  pluginConfigs.delete(pluginId)
+
   return true
 }
 
-export async function executePlugin(id: string, action: string, args: any): Promise<any> {
-  console.log(`executePlugin called: id=${id}, action=${action}, args=`, args)
-  const sandbox = activePlugins.get(id)
-  if (!sandbox) {
-    console.log(`Plugin ${id} not found in active plugins`)
+export async function executePlugin(pluginId: string, command: string, args?: unknown): Promise<unknown> {
+  console.log(`executePlugin called: id=${pluginId}, command=${command}, args=`, args)
+  const active = activePlugins.get(pluginId)
+  if (!active) {
+    console.log(`Plugin ${pluginId} not found in active plugins`)
     return null
   }
-  
-  const handler = sandbox.commands.get(action)
+
+  const handler = active.sandbox.commands.get(command)
   if (!handler) {
-    console.log(`Command ${action} not found in plugin ${id}`)
-    console.log('Available commands:', Array.from(sandbox.commands.keys()))
+    console.log(`Command ${command} not found in plugin ${pluginId}`)
+    console.log('Available commands:', Array.from(active.sandbox.commands.keys()))
     return null
   }
-  
-  console.log(`Executing command ${action} in plugin ${id}`)
+
+  console.log(`Executing command ${command} in plugin ${pluginId}`)
   try {
     const result = await handler(args)
     console.log(`Command result:`, result)
@@ -161,17 +182,9 @@ export async function executePlugin(id: string, action: string, args: any): Prom
   }
 }
 
-export function getPluginComponent(pluginId: string, type: 'panel' | 'page'): any {
-  const plugin = loadedPlugins?.get(pluginId)
-  if (!plugin) return null
-  
-  const module = getPluginModule(plugin)
-  return type === 'panel' ? module.panel : module.page
-}
-
 export function getSearchProviders(): Map<string, any> {
   const allProviders = new Map()
-  Array.from(activePlugins.entries()).forEach(([_, sandbox]) => {
+  Array.from(activePlugins.entries()).forEach(([_, { sandbox }]) => {
     Array.from(sandbox.searchProviders.entries()).forEach(([keyword, provider]) => {
       allProviders.set(keyword, provider)
     })
