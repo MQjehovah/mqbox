@@ -1,132 +1,236 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useSearchStore } from '../stores/search'
+import { ref, onMounted, onUnmounted } from 'vue'
 
-const store = useSearchStore()
-const inputRef = ref<HTMLInputElement>()
+const query = ref('')
+const results = ref<any[]>([])
+const selectedIndex = ref(0)
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 
-const hideWindow = () => {
+let pendingSearch: { id: number; query: string } | null = null
+let searchId = 0
+
+function doSearch(q: string) {
+  pendingSearch = { id: ++searchId, query: q }
+  isLoading.value = true
+  
+  setTimeout(() => {
+    if (!pendingSearch || pendingSearch.id !== searchId) return
+    
+    const currentQuery = pendingSearch.query
+    pendingSearch = null
+    
+    window.mqbox?.search.query(currentQuery)
+      .then((files: any[]) => {
+        if (searchId === searchId) {
+          results.value = files.slice(0, 20).map(f => ({
+            type: 'file',
+            title: f.name,
+            subtitle: f.path,
+            icon: getFileIcon(f.extension)
+          }))
+          selectedIndex.value = 0
+        }
+      })
+      .catch((e: any) => {
+        console.error('Search error:', e)
+        results.value = []
+      })
+      .finally(() => {
+        isLoading.value = false
+      })
+  }, 10)
+}
+
+function doPluginSearch(keyword: string, rest: string) {
+  pendingSearch = { id: ++searchId, query: keyword }
+  isLoading.value = true
+  
+  window.mqbox?.search.plugin(keyword, rest)
+    .then((pluginResults: any[]) => {
+      if (pluginResults && pluginResults.length > 0) {
+        results.value = pluginResults.slice(0, 10).map(r => ({
+          type: 'plugin',
+          title: r.title,
+          subtitle: r.subtitle || '',
+          action: r.action,
+          actionArgs: r.actionArgs,
+          pluginId: r.pluginId
+        }))
+        selectedIndex.value = 0
+      } else {
+        doSearch(keyword + ' ' + rest)
+      }
+    })
+    .catch(() => {
+      doSearch(keyword + ' ' + rest)
+    })
+    .finally(() => {
+      isLoading.value = false
+    })
+}
+
+let debounceTimer: number | null = null
+
+function handleInput() {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  
+  const q = query.value.trim()
+  if (!q) {
+    results.value = []
+    isLoading.value = false
+    error.value = null
+    return
+  }
+  
+  debounceTimer = window.setTimeout(() => {
+    const parts = q.split(/\s+/)
+    const keyword = parts[0]
+    const rest = parts.slice(1).join(' ')
+    
+    if (rest || keyword.length > 2) {
+      doPluginSearch(keyword, rest)
+    } else {
+      doSearch(q)
+    }
+  }, 200)
+}
+
+function selectNext() {
+  if (selectedIndex.value < results.value.length - 1) {
+    selectedIndex.value++
+  }
+}
+
+function selectPrev() {
+  if (selectedIndex.value > 0) {
+    selectedIndex.value--
+  }
+}
+
+function executeSelected() {
+  const result = results.value[selectedIndex.value]
+  if (!result) return
+  
+  if (result.type === 'file') {
+    window.mqbox?.file.open(result.subtitle)
+  } else if (result.action) {
+    const parts = result.action.split(':')
+    const pluginId = result.pluginId || parts[0]
+    const action = parts.slice(1).join(':')
+    window.mqbox?.plugin.execute(pluginId, action, result.actionArgs || [])
+  }
+  
   window.mqbox?.window.hide()
 }
 
-const handleKeydown = (e: KeyboardEvent) => {
+function clearSearch() {
+  query.value = ''
+  results.value = []
+  selectedIndex.value = 0
+  isLoading.value = false
+  error.value = null
+}
+
+function hideWindow() {
+  window.mqbox?.window.hide()
+}
+
+function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    store.selectNext()
+    selectNext()
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    store.selectPrev()
+    selectPrev()
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    store.executeSelected()
+    executeSelected()
   } else if (e.key === 'Escape') {
     hideWindow()
   }
 }
 
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-const debouncedSearch = (q: string) => {
-  if (debounceTimer) clearTimeout(debounceTimer)
-  if (!q.trim()) {
-    store.clearSearch()
-    return
-  }
-  debounceTimer = setTimeout(() => {
-    store.performSearch(q)
-  }, 300)
-}
-
-watch(() => store.query, (q) => {
-  debouncedSearch(q)
-})
-
-const handleSetQuery = (query: string) => {
-  store.query = query
-  if (inputRef.value) {
-    inputRef.value.focus()
-  }
-}
-
-const handleClearSearch = () => {
-  store.clearSearch()
-  if (inputRef.value) {
-    inputRef.value.focus()
-  }
-}
+const inputRef = ref<HTMLInputElement>()
 
 onMounted(() => {
-  if (inputRef.value) {
-    inputRef.value.focus()
-  }
-  window.mqbox?.window.on('search:set-query', handleSetQuery)
-  window.mqbox?.window.on('search:clear', handleClearSearch)
+  inputRef.value?.focus()
+  window.mqbox?.window.on('search:set-query', (q: string) => {
+    query.value = q
+    handleInput()
+  })
+  window.mqbox?.window.on('search:clear', clearSearch)
 })
 
 onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
-  window.mqbox?.window.removeListener?.('search:set-query', handleSetQuery)
-  window.mqbox?.window.removeListener?.('search:clear', handleClearSearch)
 })
+
+function getFileIcon(ext: string): string {
+  const icons: Record<string, string> = {
+    doc: 'doc', docx: 'doc', pdf: 'pdf',
+    xls: 'xls', xlsx: 'xls',
+    jpg: 'img', png: 'img', gif: 'img',
+    mp3: 'music', mp4: 'video',
+    exe: 'exe', zip: 'zip'
+  }
+  return icons[ext?.toLowerCase() || ''] || 'file'
+}
 </script>
 
 <template>
-  <div class="search-box-container w-full h-full flex items-center justify-center">
-    <div class="search-box w-[680px] rounded-xl bg-[#FAFAFA] shadow-[0_4px_20px_#00000026] overflow-hidden">
-      <div class="content p-[16px]">
-        <div class="search-input flex items-center gap-[12px] bg-white rounded-lg px-[16px] py-[12px] border-none">
-          <svg v-if="!store.isLoading" class="w-[22px] h-[22px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+  <div class="search-container w-full h-full flex items-center justify-center bg-transparent">
+    <div class="search-box w-[640px] bg-white rounded-xl shadow-[0_4px_20px_#00000026] overflow-hidden">
+      <div class="p-4">
+        <div class="flex items-center gap-3 bg-gray-100 rounded-lg px-4 py-3 border-none outline-none">
+          <svg v-if="!isLoading" class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
-          <svg v-else class="w-[22px] h-[22px] text-[#999999] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          <svg v-else class="w-5 h-5 text-blue-500 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-6.22-8.56"/>
           </svg>
           <input
             ref="inputRef"
-            v-model="store.query"
+            v-model="query"
             type="text"
-            placeholder="搜索文件、命令、插件..."
-            class="flex-1 outline-none border-none bg-transparent text-[18px] text-[#333333] placeholder:text-[#AAAAAA]"
+            placeholder="搜索..."
+            class="flex-1 bg-transparent outline-none border-none text-lg text-gray-700"
+            @input="handleInput"
             @keydown="handleKeydown"
           />
-          <svg class="w-[22px] h-[22px] text-[#AAAAAA] cursor-pointer hover:text-[#E53935] transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" @click="hideWindow">
-            <path d="M18 6 6 18M6 6l12 12"/>
-          </svg>
-        </div>
-
-        <div v-if="store.results.length > 0" class="result-list mt-[8px] flex flex-col gap-[4px] max-h-[300px] overflow-y-auto">
-          <div
-            v-for="(result, index) in store.results"
-            :key="index"
-            class="result-item flex items-center gap-[12px] px-[12px] py-[8px] rounded-lg cursor-pointer"
-            :class="index === store.selectedIndex ? 'bg-[#E8F4FD]' : 'bg-white hover:bg-[#F5F5F5]'"
-            @click="store.selectedIndex = index; store.executeSelected()"
-          >
-            <svg class="w-[20px] h-[20px] text-[#0078D4]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-              <polyline points="14 2 14 8 20 8"/>
+          <button @click="clearSearch" class="p-1 rounded border-none outline-none hover:bg-gray-200">
+            <svg class="w-5 h-5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18M6 6l12 12"/>
             </svg>
-            <div class="flex-1">
-              <div class="text-[14px] text-[#1E1E1E]">{{ result.title }}</div>
-              <div class="text-[12px] text-[#999999] truncate">{{ result.subtitle }}</div>
+          </button>
+        </div>
+        
+        <div v-if="results.length > 0" class="mt-3 max-h-64 overflow-auto">
+          <div
+            v-for="(r, i) in results"
+            :key="i"
+            class="flex items-center gap-3 px-3 py-2 rounded cursor-pointer transition-colors border-none"
+            :class="i === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'"
+            @click="selectedIndex = i; executeSelected()"
+          >
+            <div class="w-5 h-5 flex items-center justify-center text-blue-500">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14 2z"/>
+              </svg>
             </div>
-            <span class="text-[11px] text-[#999999]">Enter</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm truncate text-gray-800">{{ r.title }}</div>
+              <div class="text-xs text-gray-400 truncate">{{ r.subtitle }}</div>
+            </div>
           </div>
         </div>
-
-        <div v-else-if="store.isLoading" class="loading-area mt-[8px] flex items-center justify-center py-[16px]">
-          <span class="text-[14px] text-[#666666]">搜索中...</span>
+        
+        <div v-else-if="query && !isLoading" class="mt-3 text-center text-sm text-gray-400 py-4">
+          无结果
         </div>
-
-        <div v-else-if="store.query && !store.isLoading" class="empty-area mt-[8px] flex items-center justify-center py-[16px]">
-          <span class="text-[14px] text-[#666666]">未找到结果</span>
-        </div>
-
-        <div v-if="!store.query" class="hint-area mt-[8px] flex items-center gap-[8px] bg-[#F5F5F5] rounded px-[12px] py-[8px]">
-          <svg class="w-[16px] h-[16px] text-[#666666]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/>
-            <path d="M9 18h6"/><path d="M10 22h4"/>
-          </svg>
-          <span class="text-[12px] text-[#666666]">输入关键词搜索，如 ss 截图、todo 待办</span>
+        
+        <div v-if="!query" class="mt-3 text-xs text-gray-400 text-center">
+          输入关键词搜索
         </div>
       </div>
     </div>
@@ -134,47 +238,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.search-box-container {
-  background: transparent;
-}
-
-.search-input {
-  border: none;
-}
-
-.search-input input {
-  border: none;
-  outline: none;
-  background: transparent;
-}
-
-.result-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.result-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.result-list::-webkit-scrollbar-thumb {
-  background: #CCCCCC;
-  border-radius: 3px;
-}
-
-.result-list::-webkit-scrollbar-thumb:hover {
-  background: #999999;
-}
-
 .animate-spin {
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
-
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 </style>
