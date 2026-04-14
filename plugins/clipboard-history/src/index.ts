@@ -86,19 +86,19 @@ export default {
       }
     })
 
-    // 使用 Electron clipboard API 监听剪贴板变化
+    // 使用 Electron clipboard API 监听剪贴板变化（降低频率）
     if (context.clipboard) {
       clipboardInterval = setInterval(async () => {
         try {
           const text = await context.clipboard.readText()
-          if (text && !history.find(h => h.content === text)) {
+          if (text && text.length < 10000 && !history.find(h => h.content === text)) {
             history.unshift({ content: text, time: Date.now() })
-            if (history.length > 100) {
-              history = history.slice(0, 100)
+            if (history.length > 50) {
+              history = history.slice(0, 50)
             }
           }
         } catch {}
-      }, 500)
+      }, 2000)
     }
 
     context.storage?.get('history').then((data: any) => {

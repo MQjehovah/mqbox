@@ -1,5 +1,5 @@
 import { clipboard, shell, Notification, app } from 'electron'
-import { startScreenshot, captureRegion, captureFullscreen, cancelScreenshot } from '../screenshot'
+import { startScreenshot, captureRegion, cancelScreenshot } from '../screenshot'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import type { PluginStorage, PluginClipboard, PluginNotification, PluginShell, PluginFiles, PluginScreenshot } from '../../shared/types'
@@ -65,32 +65,32 @@ export function createSandbox(permissions: string[], pluginId: string) {
   } : null
 
   const clipboardApi: PluginClipboard | null = hasPermission('clipboard') ? {
-    readText: async () => clipboard.readText(),
-    writeText: async (text: string) => clipboard.writeText(text)
+    readText: () => clipboard.readText(),
+    writeText: (text: string) => clipboard.writeText(text)
   } : null
 
   const notification: PluginNotification | null = hasPermission('notification') ? {
-    show: async (title: string, body?: string) => {
+    show: (title: string, body?: string) => {
       new Notification({ title, body: body || '' }).show()
     }
   } : null
 
   const shellApi: PluginShell | null = hasPermission('shell') ? {
-    openExternal: async (url: string) => shell.openExternal(url)
+    openExternal: (url: string) => shell.openExternal(url)
   } : null
 
   const files: PluginFiles | null = (hasPermission('files:read') || hasPermission('files:write')) ? {
-    read: async (path: string) => require('fs').promises.readFile(path, 'utf-8'),
-    write: async (path: string, content: string) => require('fs').promises.writeFile(path, content),
-    exists: async (path: string) => require('fs').existsSync(path),
-    showInExplorer: async (path: string) => shell.showItemInFolder(path)
+    read: (path: string) => require('fs').promises.readFile(path, 'utf-8'),
+    write: (path: string, content: string) => require('fs').promises.writeFile(path, content),
+    exists: (path: string) => existsSync(path),
+    showInExplorer: (path: string) => shell.showItemInFolder(path)
   } : null
 
   const screenshot: PluginScreenshot | null = hasPermission('screenshot') ? {
-    start: async () => startScreenshot(),
-    captureRegion: async (region: { x: number; y: number; width: number; height: number }) => captureRegion(region.x, region.y, region.width, region.height),
-    getScreenshotList: async () => [],
-    deleteScreenshot: async () => {}
+    start: () => startScreenshot(),
+    captureRegion: (region: { x: number; y: number; width: number; height: number }) => captureRegion(region.x, region.y, region.width, region.height),
+    getScreenshotList: () => [],
+    deleteScreenshot: () => {}
   } : null
 
   const api = {

@@ -10,38 +10,62 @@ const hideWindow = () => {
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'ArrowDown') store.selectNext()
-  else if (e.key === 'ArrowUp') store.selectPrev()
-  else if (e.key === 'Enter') store.executeSelected()
-  else if (e.key === 'Escape') hideWindow()
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    store.selectNext()
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    store.selectPrev()
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    store.executeSelected()
+  } else if (e.key === 'Escape') {
+    hideWindow()
+  }
 }
 
-let debounceTimer: number | null = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const debouncedSearch = (q: string) => {
   if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = window.setTimeout(() => store.performSearch(q), 200)
+  if (!q.trim()) {
+    store.clearSearch()
+    return
+  }
+  debounceTimer = setTimeout(() => {
+    store.performSearch(q)
+  }, 300)
 }
 
-watch(() => store.query, (q) => debouncedSearch(q))
+watch(() => store.query, (q) => {
+  debouncedSearch(q)
+})
 
 const handleSetQuery = (query: string) => {
   store.query = query
-  inputRef.value?.focus()
+  if (inputRef.value) {
+    inputRef.value.focus()
+  }
 }
 
 const handleClearSearch = () => {
   store.clearSearch()
-  inputRef.value?.focus()
+  if (inputRef.value) {
+    inputRef.value.focus()
+  }
 }
 
 onMounted(() => {
-  inputRef.value?.focus()
+  if (inputRef.value) {
+    inputRef.value.focus()
+  }
   window.mqbox?.window.on('search:set-query', handleSetQuery)
   window.mqbox?.window.on('search:clear', handleClearSearch)
 })
 
 onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
+  window.mqbox?.window.removeListener?.('search:set-query', handleSetQuery)
+  window.mqbox?.window.removeListener?.('search:clear', handleClearSearch)
 })
 </script>
 
@@ -50,8 +74,11 @@ onUnmounted(() => {
     <div class="search-box w-[680px] rounded-xl bg-[#FAFAFA] shadow-[0_4px_20px_#00000026] overflow-hidden">
       <div class="content p-[16px]">
         <div class="search-input flex items-center gap-[12px] bg-white rounded-lg px-[16px] py-[12px] border-none">
-          <svg class="w-[22px] h-[22px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg v-if="!store.isLoading" class="w-[22px] h-[22px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <svg v-else class="w-[22px] h-[22px] text-[#999999] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
           </svg>
           <input
             ref="inputRef"
@@ -84,6 +111,14 @@ onUnmounted(() => {
             </div>
             <span class="text-[11px] text-[#999999]">Enter</span>
           </div>
+        </div>
+
+        <div v-else-if="store.isLoading" class="loading-area mt-[8px] flex items-center justify-center py-[16px]">
+          <span class="text-[14px] text-[#666666]">搜索中...</span>
+        </div>
+
+        <div v-else-if="store.query && !store.isLoading" class="empty-area mt-[8px] flex items-center justify-center py-[16px]">
+          <span class="text-[14px] text-[#666666]">未找到结果</span>
         </div>
 
         <div v-if="!store.query" class="hint-area mt-[8px] flex items-center gap-[8px] bg-[#F5F5F5] rounded px-[12px] py-[8px]">
@@ -128,5 +163,18 @@ onUnmounted(() => {
 
 .result-list::-webkit-scrollbar-thumb:hover {
   background: #999999;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

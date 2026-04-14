@@ -16,12 +16,14 @@ export const useSearchStore = defineStore('search', () => {
     }
 
     isLoading.value = true
+    results.value = []
+    
     try {
       const parts = q.trim().split(/\s+/)
       const keyword = parts[0]
       const rest = parts.slice(1).join(' ')
       
-      const pluginResults = await (window as any).mqbox.search.plugin(keyword, rest)
+      const pluginResults = await window.mqbox?.search.plugin(keyword, rest)
       
       if (pluginResults && pluginResults.length > 0) {
         results.value = pluginResults.map((r: any) => ({
@@ -34,7 +36,7 @@ export const useSearchStore = defineStore('search', () => {
           pluginId: r.pluginId
         }))
       } else {
-        const files: FileResult[] = await (window as any).mqbox.search.query(q)
+        const files: FileResult[] = await window.mqbox?.search.query(q) || []
         results.value = files.map(f => ({
           type: 'file',
           title: f.name,
@@ -66,8 +68,8 @@ export const useSearchStore = defineStore('search', () => {
 
     if (result.type === 'file') {
       const args = result.actionArgs as { path?: string } | undefined
-      await (window as any).mqbox.file.open(args?.path)
-      (window as any).mqbox.window.hide()
+      await window.mqbox?.file.open(args?.path || '')
+      window.mqbox?.window.hide()
     } else if (result.type === 'plugin' && result.action) {
       const parts = result.action.split(':')
       if (parts.length >= 2) {
@@ -77,7 +79,7 @@ export const useSearchStore = defineStore('search', () => {
         let args = result.actionArgs
         if (args === undefined || args === null) {
           args = []
-        } else if (typeof args === 'object') {
+        } else if (typeof args === 'object' && !Array.isArray(args)) {
           const argsObj = args as Record<string, unknown>
           if (argsObj.content) {
             args = [argsObj.content]
@@ -89,12 +91,12 @@ export const useSearchStore = defineStore('search', () => {
         }
         
         try {
-          await (window as any).mqbox.plugin.execute(pluginId, actionName, args)
+          await window.mqbox?.plugin.execute(pluginId, actionName, args)
         } catch (e) {
           console.error('Plugin execute error:', e)
         }
       }
-      (window as any).mqbox.window.hide()
+      window.mqbox?.window.hide()
     }
   }
 

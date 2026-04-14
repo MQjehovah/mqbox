@@ -10,7 +10,20 @@ export async function searchFiles(query: string): Promise<FileResult[]> {
 
   try {
     const port = config.fileSearch.everythingPort
-    const response = await fetch(`http://127.0.0.1:${port}/?search=${encodeURIComponent(query)}&json=1`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
+    
+    const response = await fetch(
+      `http://127.0.0.1:${port}/?search=${encodeURIComponent(query)}&json=1`,
+      { signal: controller.signal }
+    )
+    clearTimeout(timeoutId)
+    
+    if (!response.ok) {
+      console.error('Everything搜索HTTP错误:', response.status)
+      return []
+    }
+    
     const data = await response.json()
     
     return data.results?.map((item: any) => ({
@@ -21,7 +34,11 @@ export async function searchFiles(query: string): Promise<FileResult[]> {
       modifiedTime: item.date_modified || 0
     })) || []
   } catch (error) {
-    console.error('Everything搜索失败:', error)
+    if ((error as Error).name === 'AbortError') {
+      console.error('Everything搜索超时')
+    } else {
+      console.error('Everything搜索失败:', error)
+    }
     return []
   }
 }

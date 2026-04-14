@@ -2,6 +2,22 @@
 import { ref, onMounted } from 'vue'
 import type { PageProps } from '../../../shared/types'
 
+import TodoPage from '@plugins/todo/src/Page.vue'
+import CalculatorPage from '@plugins/calculator/src/Page.vue'
+import ScreenshotPage from '@plugins/screenshot/src/Page.vue'
+import ClipboardHistoryPage from '@plugins/clipboard-history/src/Page.vue'
+import QuickNotesPage from '@plugins/quick-notes/src/Page.vue'
+import PlayerPage from '@plugins/player/src/Page.vue'
+
+const pluginComponents: Record<string, any> = {
+  'todo': TodoPage,
+  'calculator': CalculatorPage,
+  'screenshot': ScreenshotPage,
+  'clipboard-history': ClipboardHistoryPage,
+  'quick-notes': QuickNotesPage,
+  'player': PlayerPage
+}
+
 const pluginId = ref('')
 const pageComponent = ref<any>(null)
 const pageData = ref<{ title?: string; width?: number; height?: number } | null>(null)
@@ -24,17 +40,16 @@ onMounted(async () => {
 
 const loadPage = async () => {
   isLoading.value = true
+  console.log(`Loading page for plugin: ${pluginId.value}`)
+  console.log(`Available page components:`, Object.keys(pluginComponents))
+  
   try {
-    const dirName = await window.mqbox?.plugin.getDirName(pluginId.value)
-    if (dirName) {
-      const module = await import(`../../../plugins/${dirName}/src/index.ts`)
-      const pluginModule = module.default || module
-      if (pluginModule.page) {
-        pageComponent.value = pluginModule.page
-      }
-    }
+    pageComponent.value = pluginComponents[pluginId.value] || null
+    console.log(`Page component:`, pageComponent.value)
+    
     pageData.value = await window.mqbox?.plugin.getPage(pluginId.value)
     pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
+    console.log(`Page data:`, pluginData.value)
   } catch (e) {
     console.error('Failed to load page:', e)
   }

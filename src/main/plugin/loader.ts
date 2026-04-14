@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
-import { existsSync, readdirSync, readFileSync, watch } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import type { PluginInfo, Permission } from '../../shared/types'
 
 interface PluginManifest {
@@ -19,8 +19,6 @@ interface PluginManifest {
     permissions: Permission[]
   }
 }
-
-let watcher: ReturnType<typeof watch> | null = null
 
 function getPluginsDir(): string {
   if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
@@ -102,40 +100,6 @@ export function getPluginInfo(dirName: string, manifest: PluginManifest): Plugin
 }
 
 export function startHotReload() {
-  if (watcher) return
-
-  const pluginsDir = getPluginsDir()
-  if (!existsSync(pluginsDir)) return
-
-  if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
-    console.log('Starting plugin hot reload watcher')
-
-    watcher = watch(pluginsDir, { recursive: true }, (eventType, filename) => {
-      if (!filename) return
-
-      if (filename.includes('dist') || filename.endsWith('.ts') || filename.endsWith('.vue')) {
-        console.log(`Plugin file changed: ${filename}`)
-
-        setTimeout(() => {
-          const windows = BrowserWindow.getAllWindows()
-          windows.forEach(win => {
-            if (win.webContents.getURL().includes('view=main')) {
-              win.webContents.send('plugin:hot-reload', filename)
-            }
-          })
-        }, 500)
-      }
-    })
-
-    watcher.on('error', (error) => {
-      console.error('Plugin watcher error:', error)
-    })
-  }
-}
-
-export function stopHotReload() {
-  if (watcher) {
-    watcher.close()
-    watcher = null
-  }
+  // 禁用热更新以减少内存占用
+  console.log('Hot reload disabled for stability')
 }
