@@ -91,8 +91,9 @@ async function executeSelected() {
   if (!result) return
   
   console.log('executeSelected result:', result)
+  console.log('result.action:', result.action)
   console.log('result.actionArgs:', result.actionArgs)
-  console.log('result.actionArgs?.path:', result.actionArgs?.path)
+  console.log('result.pluginId:', result.pluginId)
   
   if (result.action) {
     if (result.action.startsWith('file:')) {
@@ -103,6 +104,7 @@ async function executeSelected() {
       const parts = result.action.split(':')
       const pluginId = result.pluginId || parts[0]
       const action = parts.slice(1).join(':')
+      console.log('Executing plugin:', pluginId, 'action:', action, 'args:', result.actionArgs)
       await window.mqbox?.plugin.execute(pluginId, action, result.actionArgs || {})
     }
   }
