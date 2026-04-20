@@ -93,14 +93,19 @@ export function getPluginDirName(pluginId: string): string | undefined {
 
 export function enablePlugin(dirName: string): boolean {
   const plugin = loadedPlugins?.get(dirName)
-  if (!plugin) return false
+  if (!plugin) {
+    console.log(`Plugin ${dirName} not found in loadedPlugins`)
+    return false
+  }
 
   const module = getPluginModule(plugin)
   const pluginId = resolvePluginId(dirName, plugin.manifest)
   const permissions = plugin.manifest.mqbox?.permissions || plugin.manifest.permissions || []
   const info = getPluginInfo(dirName, plugin.manifest)
 
-  console.log(`Enabling plugin ${pluginId}, permissions:`, permissions)
+  console.log(`Enabling plugin ${dirName} -> id: ${pluginId}`)
+  console.log(`Module:`, module ? 'found' : 'not found')
+  console.log(`Permissions:`, permissions)
 
   const sandbox = createSandbox(permissions, pluginId)
 
@@ -110,7 +115,7 @@ export function enablePlugin(dirName: string): boolean {
     hasNotification: !!sandbox.api.notification
   })
 
-  const context: PluginContext = {
+const context: PluginContext = {
     plugin: info,
     registerCommand: (name: string, handler) => {
       sandbox.commands.set(name, handler)
@@ -204,10 +209,14 @@ export async function executePlugin(pluginId: string, command: string, args?: un
 
 export function getSearchProviders(): Map<string, any> {
   const allProviders = new Map()
-  Array.from(activePlugins.entries()).forEach(([_, { sandbox }]) => {
+  console.log('Getting search providers, active plugins:', Array.from(activePlugins.keys()))
+  Array.from(activePlugins.entries()).forEach(([pluginId, { sandbox }]) => {
+    console.log(`Plugin ${pluginId} search providers:`, Array.from(sandbox.searchProviders.keys()))
     Array.from(sandbox.searchProviders.entries()).forEach(([keyword, provider]) => {
+      console.log(`Adding search provider: ${keyword} from plugin ${pluginId}`)
       allProviders.set(keyword, provider)
     })
   })
+  console.log('Total search providers:', Array.from(allProviders.keys()))
   return allProviders
 }

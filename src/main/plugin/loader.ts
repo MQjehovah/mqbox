@@ -27,10 +27,48 @@ function getPluginsDir(): string {
   return join(app.getPath('userData'), 'plugins')
 }
 
+function getBuiltinPluginsDir(): string {
+  const builtinDir = join(process.cwd(), 'plugins', 'builtin')
+  console.log('Builtin plugins directory:', builtinDir)
+  console.log('Exists:', existsSync(builtinDir))
+  return builtinDir
+}
+
 export function loadPlugins(): Map<string, { manifest: PluginManifest; module: any }> {
   const plugins = new Map()
-  const pluginsDir = getPluginsDir()
+  
+  // 加载内置插件
+  const builtinDir = getBuiltinPluginsDir()
+  if (existsSync(builtinDir)) {
+    const builtinDirs = readdirSync(builtinDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+    
+    console.log('Found builtin plugins:', builtinDirs.map(d => d.name).join(', '))
+    
+    for (const dir of builtinDirs) {
+      const pluginPath = join(builtinDir, dir.name)
+      const manifestPath = join(pluginPath, 'package.json')
+      
+      if (!existsSync(manifestPath)) continue
+      
+      try {
+        const manifest: PluginManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+        const distPath = join(pluginPath, 'dist', 'index.js')
+        
+        if (existsSync(distPath)) {
+          delete require.cache[require.resolve(distPath)]
+          const module = require(distPath)
+          plugins.set(`builtin-${dir.name}`, { manifest, module })
+          console.log(`Loaded builtin plugin: ${dir.name}`)
+        }
+      } catch (error) {
+        console.error(`Failed to load builtin plugin ${dir.name}:`, error)
+      }
+    }
+  }
 
+  // 加载用户插件
+  const pluginsDir = getPluginsDir()
   console.log('Loading plugins from:', pluginsDir)
 
   if (!existsSync(pluginsDir)) {
@@ -87,15 +125,20 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
 
 export function getPluginInfo(dirName: string, manifest: PluginManifest): PluginInfo {
   const mqbox = manifest.mqbox
+  const isBuiltin = dirName.startsWith('builtin-')
+  const actualName = isBuiltin ? dirName.replace('builtin-', '') : dirName
+  
   return {
-    id: mqbox?.id || dirName,
+    id: mqbox?.id || actualName,
     name: mqbox?.displayName || manifest.displayName || manifest.name,
     version: manifest.version,
     description: manifest.description,
     icon: manifest.icon,
     enabled: true,
     keywords: mqbox?.keywords || manifest.keywords || [],
-    permissions: mqbox?.permissions || manifest.permissions || []
+    permissions: mqbox?.permissions || manifest.permissions || [],
+    hasPanel: false,
+    hasPage: false
   }
 }
 

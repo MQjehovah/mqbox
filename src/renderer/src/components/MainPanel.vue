@@ -125,27 +125,23 @@ const handlePluginReloaded = () => {
   loadPlugins()
 }
 
-let clipboardRefreshInterval: number | null = null
+const handleClipboardChanged = () => {
+  refreshPanelData('clipboard-history')
+}
 
 onMounted(() => {
   loadPlugins()
   document.addEventListener('mousemove', doResize)
   document.addEventListener('mouseup', stopResize)
   window.mqbox?.window.on('plugin:reloaded', handlePluginReloaded)
-  
-  // 每2秒刷新剪贴板历史面板
-  clipboardRefreshInterval = window.setInterval(() => {
-    refreshPanelData('clipboard-history')
-  }, 2000)
+  window.mqbox?.window.on('clipboard:changed', handleClipboardChanged)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', doResize)
   document.removeEventListener('mouseup', stopResize)
   window.mqbox?.window.removeListener?.('plugin:reloaded', handlePluginReloaded)
-  if (clipboardRefreshInterval) {
-    clearInterval(clipboardRefreshInterval)
-  }
+  window.mqbox?.window.removeListener?.('clipboard:changed', handleClipboardChanged)
 })
 </script>
 

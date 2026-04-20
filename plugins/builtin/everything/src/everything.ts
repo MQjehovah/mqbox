@@ -1,30 +1,35 @@
-import { getConfig } from '../config'
-import type { FileResult } from '../../shared/types'
+interface FileResult {
+  path: string
+  name: string
+  extension: string
+  size: number
+  modifiedTime: number
+}
+
+const EVERYTHING_PORT = 26983
 
 export async function searchFiles(query: string): Promise<FileResult[]> {
-  const config = getConfig()
+  console.log('Everything searching:', query)
   
-  if (!config.fileSearch.enableEverything) {
-    return []
-  }
-
   try {
-    const port = config.fileSearch.everythingPort
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000)
     
-    const response = await fetch(
-      `http://127.0.0.1:${port}/?search=${encodeURIComponent(query)}&json=1`,
-      { signal: controller.signal }
-    )
+    const url = `http://127.0.0.1:${EVERYTHING_PORT}/?search=${encodeURIComponent(query)}&json=1`
+    console.log('Fetching:', url)
+    
+    const response = await fetch(url, { signal: controller.signal })
     clearTimeout(timeoutId)
     
+    console.log('Response status:', response.status)
+    
     if (!response.ok) {
-      console.error('Everything搜索HTTP错误:', response.status)
+      console.error('Everything HTTP error:', response.status)
       return []
     }
     
     const data = await response.json()
+    console.log('Results count:', data.results?.length || 0)
     
     return data.results?.map((item: any) => ({
       path: item.path,
@@ -35,9 +40,9 @@ export async function searchFiles(query: string): Promise<FileResult[]> {
     })) || []
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
-      console.error('Everything搜索超时')
+      console.error('Everything search timeout')
     } else {
-      console.error('Everything搜索失败:', error)
+      console.error('Everything search failed:', error)
     }
     return []
   }

@@ -1,5 +1,4 @@
 import { ipcMain, clipboard, BrowserWindow, shell } from 'electron'
-import { searchFiles } from '../search/everything'
 import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders, reloadPlugins, getPluginPanels, getPluginPage, getPluginConfig, getPluginDirName } from '../plugin/host'
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
@@ -8,28 +7,29 @@ import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot } f
 import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
 export function setupIPC() {
-  ipcMain.handle('search:query', async (_, query: string) => {
-    try {
-      const files = await searchFiles(query)
-      return files.slice(0, 50)
-    } catch (e) {
-      console.error('search:query error:', e)
-      return []
-    }
-  })
-
   ipcMain.handle('search:plugin', async (_, keyword: string, query: string) => {
     try {
       const providers = getSearchProviders()
-      const provider = providers.get(keyword)
-      if (provider && provider.onSearch) {
-        const results = await Promise.race([
-          provider.onSearch(query),
-          new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2000))
-        ])
-        return results.slice(0, 20)
+      console.log('Search providers:', Array.from(providers.keys()))
+      console.log('Searching with keyword:', keyword, 'query:', query)
+      
+      const results: any[] = []
+      
+      for (const [kw, provider] of Array.from(providers)) {
+        if (kw === keyword || (keyword === '' && kw === '')) {
+          try {
+            const providerResults = await Promise.race([
+              provider.onSearch(query),
+              new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2000))
+            ])
+            results.push(...providerResults)
+          } catch (e) {
+            console.error(`Provider ${kw} error:`, e)
+          }
+        }
       }
-      return []
+      
+      return results.slice(0, 20)
     } catch (e) {
       console.error('search:plugin error:', e)
       return []

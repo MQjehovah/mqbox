@@ -1,0 +1,15 @@
+{
+  "name": "mqbox-builtin-everything",
+  "version": "1.0.0",
+  "displayName": "Everything 搜索",
+  "description": "使用 Everything 进行快速文件搜索",
+  "main": "dist/index.js",
+  "mqbox": {
+    "id": "everything",
+    "displayName": "Everything 搜索",
+    "keywords": [],
+    "permissions": ["files:read"],
+    "builtin": true,
+    "defaultSearch": true
+  }
+}

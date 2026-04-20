@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 const api = {
   search: {
-    query: (query: string) => ipcRenderer.invoke('search:query', query),
     plugin: (keyword: string, query: string) => ipcRenderer.invoke('search:plugin', keyword, query),
     getProviders: () => ipcRenderer.invoke('search:get-providers')
   },
