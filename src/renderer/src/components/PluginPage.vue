@@ -3,7 +3,7 @@ import { ref, onMounted, defineAsyncComponent } from 'vue'
 import type { PageProps } from '../../../shared/types'
 
 const pluginComponents: Record<string, any> = {
-  'todo': defineAsyncComponent(() => import('@plugins/todo/src/Page.vue')),
+  'todo': defineAsyncComponent(() => import('@plugins/builtin/todo/src/Page.vue')),
   'screenshot': defineAsyncComponent(() => import('@plugins/screenshot/src/Page.vue')),
   'clipboard-history': defineAsyncComponent(() => import('@plugins/clipboard-history/src/Page.vue')),
   'quick-notes': defineAsyncComponent(() => import('@plugins/quick-notes/src/Page.vue')),

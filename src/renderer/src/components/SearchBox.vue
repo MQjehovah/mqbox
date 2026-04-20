@@ -90,9 +90,14 @@ async function executeSelected() {
   const result = results.value[selectedIndex.value]
   if (!result) return
   
+  console.log('executeSelected result:', result)
+  console.log('result.actionArgs:', result.actionArgs)
+  console.log('result.actionArgs?.path:', result.actionArgs?.path)
+  
   if (result.action) {
     if (result.action.startsWith('file:')) {
       const path = result.actionArgs?.path || result.subtitle
+      console.log('Opening file with path:', path)
       window.mqbox?.file.open(path)
     } else {
       const parts = result.action.split(':')

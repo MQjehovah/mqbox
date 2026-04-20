@@ -29,6 +29,7 @@ export function setupIPC() {
               provider.onSearch(query),
               new Promise<any[]>((resolve) => setTimeout(() => resolve([]), 2000))
             ])
+            console.log(`Provider ${kw} returned:`, providerResults)
             results.push(...providerResults)
           } catch (e) {
             console.error(`Provider ${kw} error:`, e)
@@ -36,6 +37,7 @@ export function setupIPC() {
         }
       }
       
+      console.log('Final results:', results)
       return results.slice(0, 20)
     } catch (e) {
       console.error('search:plugin error:', e)

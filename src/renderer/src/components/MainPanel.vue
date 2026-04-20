@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue
 import type { PluginInfo, PluginPanel, PanelProps } from '../../../shared/types'
 
 const pluginComponents: Record<string, any> = {
-  'todo': defineAsyncComponent(() => import('@plugins/todo/src/Panel.vue')),
+  'todo': defineAsyncComponent(() => import('@plugins/builtin/todo/src/Panel.vue')),
   'screenshot': defineAsyncComponent(() => import('@plugins/screenshot/src/Panel.vue')),
   'clipboard-history': defineAsyncComponent(() => import('@plugins/clipboard-history/src/Panel.vue')),
   'quick-notes': defineAsyncComponent(() => import('@plugins/quick-notes/src/Panel.vue')),
