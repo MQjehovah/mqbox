@@ -84,7 +84,7 @@ export function getPluginConfig(pluginId: string): PluginConfig | undefined {
 
 export function getPluginDirName(pluginId: string): string | undefined {
   const plugins = getLoadedPlugins()
-  for (const [dirName, { manifest }] of plugins.entries()) {
+  for (const [dirName, { manifest }] of Array.from(plugins.entries())) {
     const id = resolvePluginId(dirName, manifest)
     if (id === pluginId) return dirName
   }
@@ -100,7 +100,15 @@ export function enablePlugin(dirName: string): boolean {
   const permissions = plugin.manifest.mqbox?.permissions || plugin.manifest.permissions || []
   const info = getPluginInfo(dirName, plugin.manifest)
 
+  console.log(`Enabling plugin ${pluginId}, permissions:`, permissions)
+
   const sandbox = createSandbox(permissions, pluginId)
+
+  console.log(`Sandbox API for ${pluginId}:`, {
+    hasClipboard: !!sandbox.api.clipboard,
+    hasStorage: !!sandbox.api.storage,
+    hasNotification: !!sandbox.api.notification
+  })
 
   const context: PluginContext = {
     plugin: info,

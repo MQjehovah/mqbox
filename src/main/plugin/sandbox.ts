@@ -64,33 +64,31 @@ export function createSandbox(permissions: string[], pluginId: string) {
     }
   } : null
 
-  const clipboardApi: PluginClipboard | null = hasPermission('clipboard') ? {
-    readText: () => clipboard.readText(),
-    writeText: (text: string) => clipboard.writeText(text)
+const clipboardApi: PluginClipboard | null = hasPermission('clipboard') ? {
+    readText: () => Promise.resolve(clipboard.readText()),
+    writeText: (text: string) => Promise.resolve(clipboard.writeText(text))
   } : null
 
-  const notification: PluginNotification | null = hasPermission('notification') ? {
-    show: (title: string, body?: string) => {
-      new Notification({ title, body: body || '' }).show()
-    }
+const notification: PluginNotification | null = hasPermission('notification') ? {
+    show: (title: string, body?: string) => Promise.resolve(new Notification({ title, body: body || '' }).show())
   } : null
 
   const shellApi: PluginShell | null = hasPermission('shell') ? {
     openExternal: (url: string) => shell.openExternal(url)
   } : null
 
-  const files: PluginFiles | null = (hasPermission('files:read') || hasPermission('files:write')) ? {
+const files: PluginFiles | null = (hasPermission('files:read') || hasPermission('files:write')) ? {
     read: (path: string) => require('fs').promises.readFile(path, 'utf-8'),
     write: (path: string, content: string) => require('fs').promises.writeFile(path, content),
-    exists: (path: string) => existsSync(path),
-    showInExplorer: (path: string) => shell.showItemInFolder(path)
+    exists: (path: string) => Promise.resolve(existsSync(path)),
+    showInExplorer: (path: string) => Promise.resolve(shell.showItemInFolder(path))
   } : null
 
-  const screenshot: PluginScreenshot | null = hasPermission('screenshot') ? {
+const screenshot: PluginScreenshot | null = hasPermission('screenshot') ? {
     start: () => startScreenshot(),
     captureRegion: (region: { x: number; y: number; width: number; height: number }) => captureRegion(region.x, region.y, region.width, region.height),
-    getScreenshotList: () => [],
-    deleteScreenshot: () => {}
+    getScreenshotList: () => Promise.resolve([]),
+    deleteScreenshot: () => Promise.resolve()
   } : null
 
   const api = {

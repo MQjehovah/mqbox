@@ -23,7 +23,12 @@ export default {
   panel: Panel,
   page: Page,
 
-  activate(context: any) {
+activate(context: any) {
+    console.log('clipboard-history plugin activating...')
+    console.log('context.clipboard:', !!context.clipboard)
+    console.log('context.storage:', !!context.storage)
+    console.log('context.notification:', !!context.notification)
+
     context.registerCommand('getPanelData', async () => {
       return {
         history: history.slice(0, 3)
@@ -86,19 +91,26 @@ export default {
       }
     })
 
-    // 使用 Electron clipboard API 监听剪贴板变化（降低频率）
+// 使用 Electron clipboard API 监听剪贴板变化（降低频率）
     if (context.clipboard) {
+      console.log('Starting clipboard monitoring...')
       clipboardInterval = setInterval(async () => {
         try {
           const text = await context.clipboard.readText()
+          console.log('Clipboard read:', text ? text.slice(0, 20) + '...' : 'empty')
           if (text && text.length < 10000 && !history.find(h => h.content === text)) {
             history.unshift({ content: text, time: Date.now() })
+            console.log('Added to history, total:', history.length)
             if (history.length > 50) {
               history = history.slice(0, 50)
             }
           }
-        } catch {}
+        } catch (e) {
+          console.error('Clipboard read error:', e)
+        }
       }, 2000)
+    } else {
+      console.log('No clipboard API available!')
     }
 
     context.storage?.get('history').then((data: any) => {

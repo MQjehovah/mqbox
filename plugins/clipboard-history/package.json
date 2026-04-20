@@ -12,7 +12,7 @@
     "id": "clipboard-history",
     "displayName": "剪贴板历史",
     "keywords": ["cb"],
-    "permissions": ["clipboard", "notification"]
+    "permissions": ["clipboard", "notification", "storage"]
   },
   "devDependencies": {
     "vite": "^5.0.0",

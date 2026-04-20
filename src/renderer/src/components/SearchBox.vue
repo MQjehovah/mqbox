@@ -3,12 +3,38 @@ import { ref, onMounted, onUnmounted } from 'vue'
 
 const query = ref('')
 const results = ref<any[]>([])
+const clipboardHistory = ref<any[]>([])
 const selectedIndex = ref(0)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
 let pendingSearch: { id: number; query: string } | null = null
 let searchId = 0
+
+async function loadClipboardHistory() {
+  try {
+    const data = await window.mqbox?.plugin.execute('clipboard-history', 'getPageData', {})
+    if (data && data.history) {
+      clipboardHistory.value = data.history.slice(0, 5).map((item: any) => ({
+        type: 'clipboard',
+        title: item.content.slice(0, 50),
+        subtitle: formatTime(item.time),
+        content: item.content
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to load clipboard history:', e)
+  }
+}
+
+function formatTime(timestamp: number) {
+  const diff = Date.now() - timestamp
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  const date = new Date(timestamp)
+  return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`
+}
 
 function doSearch(q: string) {
   pendingSearch = { id: ++searchId, query: q }
@@ -88,7 +114,11 @@ function handleInput() {
     const keyword = parts[0]
     const rest = parts.slice(1).join(' ')
     
-    if (rest || keyword.length > 2) {
+    if (keyword === 'cb') {
+      results.value = clipboardHistory.value
+      selectedIndex.value = 0
+      isLoading.value = false
+    } else if (rest || keyword.length > 2) {
       doPluginSearch(keyword, rest)
     } else {
       doSearch(q)
@@ -108,9 +138,20 @@ function selectPrev() {
   }
 }
 
+function copyClipboardItem(content: string) {
+  window.mqbox?.clipboard?.write(content)
+  window.mqbox?.window.hide()
+}
+
 function executeSelected() {
   const result = results.value[selectedIndex.value]
   if (!result) return
+  
+  if (result.type === 'clipboard') {
+    window.mqbox?.clipboard?.write(result.content)
+    window.mqbox?.window.hide()
+    return
+  }
   
   if (result.type === 'file') {
     window.mqbox?.file.open(result.subtitle)
@@ -118,7 +159,7 @@ function executeSelected() {
     const parts = result.action.split(':')
     const pluginId = result.pluginId || parts[0]
     const action = parts.slice(1).join(':')
-    window.mqbox?.plugin.execute(pluginId, action, result.actionArgs || [])
+    window.mqbox?.plugin.execute(pluginId, action, result.actionArgs || {})
   }
   
   window.mqbox?.window.hide()
@@ -130,6 +171,7 @@ function clearSearch() {
   selectedIndex.value = 0
   isLoading.value = false
   error.value = null
+  loadClipboardHistory()
 }
 
 function hideWindow() {
@@ -155,6 +197,7 @@ const inputRef = ref<HTMLInputElement>()
 
 onMounted(() => {
   inputRef.value?.focus()
+  loadClipboardHistory()
   window.mqbox?.window.on('search:set-query', (q: string) => {
     query.value = q
     handleInput()
@@ -209,7 +252,7 @@ function getFileIcon(ext: string): string {
           </button>
         </div>
         
-        <div v-if="results.length > 0" class="mt-3 max-h-64 overflow-auto">
+<div v-if="results.length > 0" class="mt-3 max-h-64 overflow-auto">
           <div
             v-for="(r, i) in results"
             :key="i"
@@ -217,8 +260,12 @@ function getFileIcon(ext: string): string {
             :class="i === selectedIndex ? 'bg-blue-50' : 'hover:bg-gray-50'"
             @click="selectedIndex = i; executeSelected()"
           >
-            <div class="w-5 h-5 flex items-center justify-center text-blue-500">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="w-5 h-5 flex items-center justify-center" :class="r.type === 'clipboard' ? 'text-green-500' : 'text-blue-500'">
+              <svg v-if="r.type === 'clipboard'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14 2z"/>
               </svg>
             </div>
@@ -233,8 +280,31 @@ function getFileIcon(ext: string): string {
           无结果
         </div>
         
-        <div v-if="!query" class="mt-3 text-xs text-gray-400 text-center">
-          输入关键词搜索
+        <div v-if="!query && clipboardHistory.length > 0" class="mt-3">
+          <div class="text-xs text-gray-400 mb-2 px-3">最近复制（输入 cb 快速访问）</div>
+          <div class="max-h-40 overflow-auto">
+            <div
+              v-for="(item, i) in clipboardHistory"
+              :key="i"
+              class="flex items-center gap-3 px-3 py-2 rounded cursor-pointer transition-colors hover:bg-gray-50"
+              @click="copyClipboardItem(item.content)"
+            >
+              <div class="w-5 h-5 flex items-center justify-center text-green-500">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm truncate text-gray-800">{{ item.title }}</div>
+                <div class="text-xs text-gray-400 truncate">{{ item.subtitle }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else-if="!query" class="mt-3 text-xs text-gray-400 text-center">
+          输入关键词搜索，或输入 cb 查看剪贴板历史
         </div>
       </div>
     </div>
