@@ -179,6 +179,7 @@ export default {
     context.registerSearchProvider({
       keyword: 'play',
       name: '播放器',
+      priority: 20,
       onSearch: async (query: string) => {
         if (!query) {
           return [{

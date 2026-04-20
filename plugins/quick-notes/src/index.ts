@@ -69,6 +69,7 @@ export default {
     context.registerSearchProvider({
       keyword: 'note',
       name: '快速笔记',
+      priority: 30,
       onSearch: async (query: string) => {
         if (!query) {
           return [{

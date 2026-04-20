@@ -15,7 +15,14 @@ export function setupIPC() {
       
       const results: any[] = []
       
-      for (const [kw, provider] of Array.from(providers)) {
+      const sortedProviders = Array.from(providers.entries())
+        .sort((a, b) => {
+          const pa = a[1].priority ?? 100
+          const pb = b[1].priority ?? 100
+          return pa - pb
+        })
+      
+      for (const [kw, provider] of sortedProviders) {
         if (kw === keyword || (keyword === '' && kw === '')) {
           try {
             const providerResults = await Promise.race([
@@ -41,7 +48,8 @@ export function setupIPC() {
       const providers = getSearchProviders()
       return Array.from(providers.entries()).map(([keyword, provider]) => ({
         keyword,
-        name: provider.name || keyword
+        name: provider.name || keyword,
+        priority: provider.priority ?? 100
       }))
     } catch (e) {
       console.error('search:get-providers error:', e)

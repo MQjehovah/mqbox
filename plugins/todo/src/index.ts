@@ -182,6 +182,7 @@ export default {
     context.registerSearchProvider({
       keyword: 'todo',
       name: '待办事项',
+      priority: 40,
       onSearch: async (query: string) => {
         if (!query) {
           return [{

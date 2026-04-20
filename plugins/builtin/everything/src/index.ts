@@ -38,7 +38,7 @@ export default {
     context.registerSearchProvider({
       keyword: '',
       name: '文件搜索',
-      priority: 0,
+      priority: 100,
       onSearch: async (query: string) => {
         if (!query) return []
         

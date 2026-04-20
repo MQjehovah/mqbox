@@ -69,6 +69,7 @@ export interface CommandResult {
 export interface SearchProvider {
   keyword: string
   name: string
+  priority?: number
   onSearch: (query: string) => Promise<SearchResult[]> | SearchResult[]
 }
 

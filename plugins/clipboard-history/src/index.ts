@@ -61,9 +61,19 @@ export default {
       return { success: true }
     })
 
+    context.registerCommand('onClipboardChange', async (text: string) => {
+      if (text && text.length < 10000 && !history.find(h => h.content === text)) {
+        history.unshift({ content: text, time: Date.now() })
+        if (history.length > 50) {
+          history = history.slice(0, 50)
+        }
+      }
+    })
+
     context.registerSearchProvider({
       keyword: 'cb',
       name: '剪贴板历史',
+      priority: 10,
       onSearch: async (query: string) => {
         if (!query) {
           return history.slice(0, 5).map(item => ({
@@ -100,15 +110,6 @@ export default {
     const context = (this as any).context
     if (context?.storage) {
       context.storage.set('history', history)
-    }
-  },
-
-  onClipboardChange(text: string) {
-    if (text && text.length < 10000 && !history.find(h => h.content === text)) {
-      history.unshift({ content: text, time: Date.now() })
-      if (history.length > 50) {
-        history = history.slice(0, 50)
-      }
     }
   }
 }

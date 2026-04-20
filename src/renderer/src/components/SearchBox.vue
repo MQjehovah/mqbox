@@ -6,8 +6,18 @@ const results = ref<any[]>([])
 const selectedIndex = ref(0)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+const providers = ref<{keyword: string; name: string}[]>([])
 
 let debounceTimer: number | null = null
+
+async function loadProviders() {
+  try {
+    const list = await window.mqbox?.search.getProviders() || []
+    providers.value = list
+  } catch (e) {
+    console.error('Failed to load providers:', e)
+  }
+}
 
 function handleInput() {
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -24,16 +34,17 @@ function handleInput() {
   
   debounceTimer = window.setTimeout(async () => {
     const parts = q.split(/\s+/)
-    const keyword = parts[0]
+    const firstWord = parts[0]
     const rest = parts.slice(1).join(' ')
     
     try {
       let searchKeyword = ''
       let searchQuery = q
       
-      if (rest && keyword.length === 2) {
-        searchKeyword = keyword
-        searchQuery = rest
+      const matchedProvider = providers.value.find(p => p.keyword === firstWord)
+      if (matchedProvider) {
+        searchKeyword = firstWord
+        searchQuery = rest || ''
       }
       
       console.log('Searching:', { keyword: searchKeyword, query: searchQuery })
@@ -124,6 +135,7 @@ function handleKeydown(e: KeyboardEvent) {
 const inputRef = ref<HTMLInputElement>()
 
 onMounted(() => {
+  loadProviders()
   inputRef.value?.focus()
   window.mqbox?.window.on('search:set-query', (q: string) => {
     query.value = q
