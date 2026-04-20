@@ -5,6 +5,7 @@ import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
 import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
+import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
 export function setupIPC() {
   ipcMain.handle('search:query', async (_, query: string) => {
@@ -250,9 +251,14 @@ export function setupIPC() {
     }
   })
 
-  ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: number, height: number) => {
+ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: number, height: number) => {
     try {
-      return await captureRegion(x, y, width, height)
+      const dataUrl = await captureRegion(x, y, width, height)
+      if (dataUrl) {
+        cancelScreenshot()
+        showEditor(dataUrl)
+      }
+      return dataUrl
     } catch (e) {
       console.error('screenshot:capture error:', e)
       return null
@@ -267,11 +273,61 @@ export function setupIPC() {
     }
   })
 
-  ipcMain.on('screenshot:cancel', () => {
+ipcMain.on('screenshot:cancel', () => {
     try {
       cancelScreenshot()
     } catch (e) {
       console.error('screenshot:cancel error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:show-editor', (_, dataUrl: string) => {
+    try {
+      showEditor(dataUrl)
+    } catch (e) {
+      console.error('screenshot:show-editor error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:pin', (_, dataUrl: string) => {
+    try {
+      pinImage(dataUrl)
+    } catch (e) {
+      console.error('screenshot:pin error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:save', async (_, dataUrl: string) => {
+    try {
+      await saveImage(dataUrl)
+    } catch (e) {
+      console.error('screenshot:save error:', e)
+    }
+  })
+
+  ipcMain.handle('clipboard:write-image', async (_, dataUrl: string) => {
+    try {
+      await copyImage(dataUrl)
+      return true
+    } catch (e) {
+      console.error('clipboard:write-image error:', e)
+      return false
+    }
+  })
+
+  ipcMain.on('screenshot:close-editor', () => {
+    try {
+      closeEditor()
+    } catch (e) {
+      console.error('screenshot:close-editor error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:close-all-pins', () => {
+    try {
+      closeAllPins()
+    } catch (e) {
+      console.error('screenshot:close-all-pins error:', e)
     }
   })
 }

@@ -94,20 +94,13 @@ const onMouseUp = async (e: MouseEvent) => {
   e.preventDefault()
   isSelecting.value = false
   
-  console.log('Mouse up, selection:', selection.value)
-  
   if (selection.value.width > 5 && selection.value.height > 5) {
-    try {
-      const result = await window.mqbox?.screenshot?.capture(
-        selection.value.x,
-        selection.value.y,
-        selection.value.width,
-        selection.value.height
-      )
-      console.log('Capture result:', result ? 'success' : 'failed')
-    } catch (err) {
-      console.error('Failed to capture:', err)
-    }
+    await window.mqbox?.screenshot?.capture(
+      selection.value.x,
+      selection.value.y,
+      selection.value.width,
+      selection.value.height
+    )
   }
 }
 

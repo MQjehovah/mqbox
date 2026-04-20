@@ -37,9 +37,10 @@ window: {
     on: (channel: string, callback: (...args: any[]) => void) => void
     removeListener: (channel: string, callback: (...args: any[]) => void) => void
   }
-  clipboard: {
+clipboard: {
     read: () => Promise<string>
     write: (text: string) => Promise<void>
+    writeImage: (dataUrl: string) => Promise<boolean>
   }
   file: {
     open: (path: string) => Promise<string>
@@ -50,6 +51,11 @@ window: {
     capture: (x: number, y: number, width: number, height: number) => Promise<string | null>
     start: () => void
     cancel: () => void
+    showEditor: (dataUrl: string) => void
+    pin: (dataUrl: string) => void
+    save: (dataUrl: string) => void
+    closeEditor: () => void
+    closeAllPins: () => void
   }
 }
 

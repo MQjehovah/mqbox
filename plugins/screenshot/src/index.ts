@@ -30,16 +30,9 @@ export default {
       }
     })
 
-    context.registerCommand('region', async () => {
-      const capture: Capture = {
-        id: Date.now().toString(),
-        path: `/screenshot_${Date.now()}.png`,
-        time: new Date().toISOString(),
-        type: 'region'
-      }
-      captures.unshift(capture)
-      lastCapture = capture.time
-      return { success: true, capture }
+context.registerCommand('region', async () => {
+      context.screenshot?.start()
+      return { success: true }
     })
 
     context.registerCommand('fullscreen', async () => {

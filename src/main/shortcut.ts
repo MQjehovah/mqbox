@@ -5,8 +5,8 @@ import { toggleWindow } from './windowManager'
 export function setupShortcut() {
   const config = getConfig()
   
-  const toggleKey = config.shortcut?.toggle || 'CommandOrControl+Space'
-  const searchKey = config.shortcut?.search || 'CommandOrControl+Alt+Space'
+  const searchKey = config.shortcut?.toggle || 'CommandOrControl+Space'
+  const toggleKey = config.shortcut?.search || 'CommandOrControl+Alt+Space'
 
   const toggleSuccess = globalShortcut.register(toggleKey, () => {
     toggleWindow('main')

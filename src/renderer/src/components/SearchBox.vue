@@ -158,8 +158,12 @@ onMounted(() => {
   window.mqbox?.window.on('search:set-query', (q: string) => {
     query.value = q
     handleInput()
+    inputRef.value?.focus()
   })
-  window.mqbox?.window.on('search:clear', clearSearch)
+  window.mqbox?.window.on('search:clear', () => {
+    clearSearch()
+    setTimeout(() => inputRef.value?.focus(), 0)
+  })
 })
 
 onUnmounted(() => {
@@ -179,7 +183,7 @@ function getFileIcon(ext: string): string {
 </script>
 
 <template>
-  <div class="search-container w-full h-full flex items-center justify-center bg-transparent">
+  <div class="search-container w-full h-full flex items-start justify-center bg-transparent">
     <div class="search-box w-[640px] bg-white rounded-xl shadow-[0_4px_20px_#00000026] overflow-hidden">
       <div class="p-4">
         <div class="flex items-center gap-3 bg-gray-100 rounded-lg px-4 py-3 border-none outline-none">

@@ -91,15 +91,10 @@ export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; im
 export async function captureRegion(screenX: number, screenY: number, width: number, height: number): Promise<string | null> {
   const allDisplays = screen.getAllDisplays()
   
-  console.log('Capture region:', { screenX, screenY, width, height })
-  console.log('All displays:', allDisplays.map(d => ({ id: d.id, bounds: d.bounds })))
-  
   const matchedDisplay = allDisplays.find(d => {
     const { x, y, width: w, height: h } = d.bounds
     return screenX >= x && screenX < x + w && screenY >= y && screenY < y + h
   }) || screen.getPrimaryDisplay()
-  
-  console.log('Matched display:', matchedDisplay.bounds)
   
   const { bounds, scaleFactor } = matchedDisplay
   const displayIndex = allDisplays.findIndex(d => d.id === matchedDisplay.id)
@@ -120,8 +115,6 @@ export async function captureRegion(screenX: number, screenY: number, width: num
   const source = sources[displayIndex] || sources[0]
   const thumbSize = source.thumbnail.getSize()
   
-  console.log('Source thumbnail size:', thumbSize)
-  
   const relativeX = Math.max(0, screenX - bounds.x)
   const relativeY = Math.max(0, screenY - bounds.y)
   
@@ -130,8 +123,6 @@ export async function captureRegion(screenX: number, screenY: number, width: num
   const cropWidth = Math.floor(width * scaleFactor)
   const cropHeight = Math.floor(height * scaleFactor)
   
-  console.log('Crop params:', { cropX, cropY, cropWidth, cropHeight })
-  
   const crop = source.thumbnail.crop({
     x: Math.min(cropX, thumbSize.width - 1),
     y: Math.min(cropY, thumbSize.height - 1),
@@ -139,14 +130,7 @@ export async function captureRegion(screenX: number, screenY: number, width: num
     height: Math.min(cropHeight, thumbSize.height - cropY)
   })
   
-  const dataUrl = crop.toDataURL()
-  const image = nativeImage.createFromDataURL(dataUrl)
-  clipboard.writeImage(image)
-  
-  console.log('Capture completed, image size:', crop.getSize())
-  
-  cancelScreenshot()
-  return dataUrl
+  return crop.toDataURL()
 }
 
 export async function startScreenshot(): Promise<void> {

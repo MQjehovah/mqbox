@@ -36,20 +36,26 @@ const api = {
       ipcRenderer.removeListener(channel, callback)
     }
   },
-  clipboard: {
+clipboard: {
     read: () => ipcRenderer.invoke('clipboard:read'),
-    write: (text: string) => ipcRenderer.invoke('clipboard:write', text)
+    write: (text: string) => ipcRenderer.invoke('clipboard:write', text),
+    writeImage: (dataUrl: string) => ipcRenderer.invoke('clipboard:write-image', dataUrl)
   },
   file: {
     open: (path: string) => ipcRenderer.invoke('file:open', path),
     showInExplorer: (path: string) => ipcRenderer.invoke('file:showInExplorer', path)
   },
-  screenshot: {
+screenshot: {
     getAllScreens: () => ipcRenderer.invoke('screenshot:get-all-screens'),
     capture: (x: number, y: number, width: number, height: number) =>
       ipcRenderer.invoke('screenshot:capture', x, y, width, height),
     start: () => ipcRenderer.send('screenshot:start'),
-    cancel: () => ipcRenderer.send('screenshot:cancel')
+    cancel: () => ipcRenderer.send('screenshot:cancel'),
+    showEditor: (dataUrl: string) => ipcRenderer.send('screenshot:show-editor', dataUrl),
+    pin: (dataUrl: string) => ipcRenderer.send('screenshot:pin', dataUrl),
+    save: (dataUrl: string) => ipcRenderer.send('screenshot:save', dataUrl),
+    closeEditor: () => ipcRenderer.send('screenshot:close-editor'),
+    closeAllPins: () => ipcRenderer.send('screenshot:close-all-pins')
   }
 }
 
