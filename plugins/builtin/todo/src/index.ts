@@ -1,6 +1,6 @@
 import Panel from './Panel.vue'
 import Page from './Page.vue'
-import type { PluginModule, PluginContext } from '../../../shared/types'
+import type { PluginModule, PluginContext } from '../../../../shared/types'
 
 let todos: any[] = []
 

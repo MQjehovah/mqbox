@@ -1,5 +1,5 @@
 {
-  "name": "mqbox-plugin-todo",
+  "name": "mqbox-builtin-todo",
   "version": "1.0.0",
   "displayName": "待办事项",
   "description": "管理待办事项和任务",
@@ -12,7 +12,8 @@
     "id": "todo",
     "displayName": "待办事项",
     "keywords": ["todo", "task"],
-    "permissions": ["storage", "notification"]
+    "permissions": ["storage", "notification"],
+    "builtin": true
   },
   "devDependencies": {
     "vite": "^5.0.0",
