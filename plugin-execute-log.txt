@@ -1,0 +1,14 @@
+plugin:execute called: id=todo, action=getPanelData, args={}
+result: {"pendingCount":2,"todos":[{"id":"1776708381779","text":"测试","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708381779},{"id":"1776708211889","text":"加油","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708211889},{"id":"1776097307069","text":"你哦好","priority":"medium","dueDate":null,"completed":true,"createdAt":1776097307069,"completedAt":1776708486647}],"items":[{"id":"1776708381779","text":"测试","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708381779},{"id":"1776708211889","text":"加油","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708211889}]}
+plugin:execute called: id=clipboard-history, action=getPanelData, args={}
+result: {"history":[]}
+plugin:execute called: id=player, action=getPanelData, args={}
+result: {"currentTrack":null,"isPlaying":false,"currentTime":0,"duration":0,"volume":100,"playlist":[],"playMode":"sequence"}
+plugin:execute called: id=quick-notes, action=getPanelData, args={}
+result: {"notes":[]}
+plugin:execute called: id=screenshot, action=getPanelData, args={}
+result: {"lastCapture":null,"captures":[]}
+plugin:execute called: id=todo, action=done, args={"id":"1776708381779"}
+result: {"title":"已完成","subtitle":"测试"}
+plugin:execute called: id=todo, action=getPanelData, args={}
+result: {"pendingCount":1,"todos":[{"id":"1776708381779","text":"测试","priority":"medium","dueDate":null,"completed":true,"createdAt":1776708381779,"completedAt":1776709338599},{"id":"1776708211889","text":"加油","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708211889},{"id":"1776097307069","text":"你哦好","priority":"medium","dueDate":null,"completed":true,"createdAt":1776097307069,"completedAt":1776708486647}],"items":[{"id":"1776708211889","text":"加油","priority":"medium","dueDate":null,"completed":false,"createdAt":1776708211889}]}

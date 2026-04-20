@@ -87,13 +87,15 @@ function selectPrev() {
 }
 
 async function executeSelected() {
-  const result = results.value[selectedIndex.value]
-  if (!result) return
+  console.log('executeSelected called')
   
-  console.log('executeSelected result:', result)
-  console.log('result.action:', result.action)
-  console.log('result.actionArgs:', result.actionArgs)
-  console.log('result.pluginId:', result.pluginId)
+  const result = results.value[selectedIndex.value]
+  if (!result) {
+    console.log('No result selected, returning')
+    return
+  }
+  
+  console.log('result:', result)
   
   if (result.action) {
     if (result.action.startsWith('file:')) {
@@ -104,8 +106,10 @@ async function executeSelected() {
       const parts = result.action.split(':')
       const pluginId = result.pluginId || parts[0]
       const action = parts.slice(1).join(':')
-      console.log('Executing plugin:', pluginId, 'action:', action, 'args:', result.actionArgs)
-      await window.mqbox?.plugin.execute(pluginId, action, result.actionArgs || {})
+      
+      const args = JSON.parse(JSON.stringify(result.actionArgs || {}))
+      console.log('Executing plugin:', pluginId, 'action:', action, 'args:', args)
+      await window.mqbox?.plugin.execute(pluginId, action, args)
     }
   }
   

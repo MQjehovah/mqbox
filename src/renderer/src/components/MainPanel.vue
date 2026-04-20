@@ -128,12 +128,19 @@ const handleClipboardChanged = () => {
   refreshPanelData('clipboard-history')
 }
 
+const handlePluginExecuted = (data: { pluginId: string, action: string }) => {
+  if (data.action !== 'getPanelData') {
+    refreshPanelData(data.pluginId)
+  }
+}
+
 onMounted(() => {
   loadPlugins()
   document.addEventListener('mousemove', doResize)
   document.addEventListener('mouseup', stopResize)
   window.mqbox?.window.on('plugin:reloaded', handlePluginReloaded)
   window.mqbox?.window.on('clipboard:changed', handleClipboardChanged)
+  window.mqbox?.window.on('plugin:executed', handlePluginExecuted)
 })
 
 onUnmounted(() => {
@@ -141,6 +148,7 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', stopResize)
   window.mqbox?.window.removeListener?.('plugin:reloaded', handlePluginReloaded)
   window.mqbox?.window.removeListener?.('clipboard:changed', handleClipboardChanged)
+  window.mqbox?.window.removeListener?.('plugin:executed', handlePluginExecuted)
 })
 </script>
 

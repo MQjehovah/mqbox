@@ -75,6 +75,7 @@ export default {
       const saved = await context.storage.get('todos')
       if (saved && Array.isArray(saved)) {
         todos = saved
+        console.log('Todo loaded from storage:', todos.length, 'items')
       }
     }
 
@@ -184,39 +185,52 @@ export default {
       name: '待办事项',
       priority: 40,
       onSearch: async (query: string) => {
-        if (!query) {
-          return [{
-            title: '添加待办',
-            subtitle: 'todo add 任务内容',
-            icon: 'plus',
-            action: 'todo:add',
-            pluginId: 'todo'
-          }]
-        }
+        console.log('todo onSearch called, query:', query, 'todos:', todos.length)
+        const results: any[] = []
         
         if (query.startsWith('add ')) {
           const content = query.substring(4).trim()
-          return [{
+          results.push({
             title: `添加: ${content}`,
             subtitle: '按回车添加',
             icon: 'plus',
             action: 'todo:add',
             actionArgs: { content },
             pluginId: 'todo'
-          }]
+          })
+        } else {
+          results.push({
+            title: '添加待办',
+            subtitle: 'todo add 任务内容',
+            icon: 'plus',
+            action: 'todo:add',
+            pluginId: 'todo'
+          })
         }
         
-        return todos
-          .filter(t => t.text.toLowerCase().includes(query.toLowerCase()))
-          .slice(0, 5)
-          .map(t => ({
+        const pendingTodos = todos.filter(t => !t.completed)
+        console.log('pendingTodos:', pendingTodos.length)
+        if (pendingTodos.length > 0) {
+          results.push(...pendingTodos.slice(0, 5).map(t => ({
             title: t.text,
-            subtitle: t.dueDate ? formatDueDate(t.dueDate) : '',
-            icon: t.completed ? 'check' : 'circle',
-            action: t.completed ? 'todo:undo' : 'todo:done',
+            subtitle: t.dueDate ? formatDueDate(t.dueDate) : '点击完成',
+            icon: 'circle',
+            action: 'todo:done',
             actionArgs: { id: t.id },
             pluginId: 'todo'
-          }))
+          })))
+        }
+        
+        console.log('todo onSearch results:', results.length)
+        
+        if (query && !query.startsWith('add ')) {
+          return results.filter(r => 
+            r.title.toLowerCase().includes(query.toLowerCase()) ||
+            (r.subtitle && r.subtitle.toLowerCase().includes(query.toLowerCase()))
+          )
+        }
+        
+        return results
       }
     })
   },

@@ -9,6 +9,9 @@ import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins }
 export function setupIPC() {
   ipcMain.handle('search:plugin', async (_, keyword: string, query: string) => {
     try {
+      console.log('Raw received keyword:', JSON.stringify(keyword))
+      console.log('Raw received query:', JSON.stringify(query))
+      
       const providers = getSearchProviders()
       console.log('Search providers:', Array.from(providers.keys()))
       console.log('Searching with keyword:', keyword, 'query:', query)
@@ -88,7 +91,26 @@ export function setupIPC() {
   
   ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => {
     try {
-      return await executePlugin(id, action, args)
+      const fs = require('fs')
+      const path = require('path')
+      const logPath = path.join(process.cwd(), 'plugin-execute-log.txt')
+      const logContent = `plugin:execute called: id=${id}, action=${action}, args=${JSON.stringify(args)}\n`
+      fs.appendFileSync(logPath, logContent)
+      
+      console.log('plugin:execute received:', { id, action, args })
+      const result = await executePlugin(id, action, args)
+      console.log('plugin:execute result:', result)
+      
+      fs.appendFileSync(logPath, `result: ${JSON.stringify(result)}\n`)
+      
+      const mainWindow = BrowserWindow.getAllWindows().find(w =>
+        w.webContents.getURL().includes('view=main')
+      )
+      if (mainWindow) {
+        mainWindow.webContents.send('plugin:executed', { pluginId: id, action })
+      }
+      
+      return result
     } catch (e) {
       console.error('plugin:execute error:', e)
       return null

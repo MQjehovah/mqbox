@@ -1,3 +1,5 @@
+process.env.LANG = 'en_US.UTF-8'
+
 import { app, globalShortcut } from 'electron'
 import { setupShortcut } from './shortcut'
 import { setupTray } from './tray'
