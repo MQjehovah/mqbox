@@ -1,21 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, defineAsyncComponent } from 'vue'
 import type { PluginInfo, PluginPanel, PanelProps } from '../../../shared/types'
 
-import TodoPanel from '@plugins/todo/src/Panel.vue'
-import CalculatorPanel from '@plugins/calculator/src/Panel.vue'
-import ScreenshotPanel from '@plugins/screenshot/src/Panel.vue'
-import ClipboardHistoryPanel from '@plugins/clipboard-history/src/Panel.vue'
-import QuickNotesPanel from '@plugins/quick-notes/src/Panel.vue'
-import PlayerPanel from '@plugins/player/src/Panel.vue'
-
 const pluginComponents: Record<string, any> = {
-  'todo': TodoPanel,
-  'calculator': CalculatorPanel,
-  'screenshot': ScreenshotPanel,
-  'clipboard-history': ClipboardHistoryPanel,
-  'quick-notes': QuickNotesPanel,
-  'player': PlayerPanel
+  'todo': defineAsyncComponent(() => import('@plugins/todo/src/Panel.vue')),
+  'screenshot': defineAsyncComponent(() => import('@plugins/screenshot/src/Panel.vue')),
+  'clipboard-history': defineAsyncComponent(() => import('@plugins/clipboard-history/src/Panel.vue')),
+  'quick-notes': defineAsyncComponent(() => import('@plugins/quick-notes/src/Panel.vue')),
+  'player': defineAsyncComponent(() => import('@plugins/player/src/Panel.vue'))
 }
 
 const pluginList = ref<PluginInfo[]>([])
@@ -32,14 +24,22 @@ const loadPlugins = async () => {
     panels.value = await window.mqbox?.plugin.getPanels() || []
     console.log('Panels:', panels.value.map(p => p.pluginId))
 
+    const validPanels: string[] = []
     for (const panel of panels.value) {
       try {
-        panelData.value[panel.pluginId] = await window.mqbox?.plugin.execute(panel.pluginId, 'getPanelData', {})
-        console.log(`Panel data for ${panel.pluginId}:`, panelData.value[panel.pluginId])
+        const data = await window.mqbox?.plugin.execute(panel.pluginId, 'getPanelData', {})
+        if (data !== undefined && data !== null) {
+          panelData.value[panel.pluginId] = data
+          validPanels.push(panel.pluginId)
+          console.log(`Panel data for ${panel.pluginId}:`, data)
+        } else {
+          console.log(`Panel ${panel.pluginId} has no panelData, skipping`)
+        }
       } catch (e) {
         console.error(`Failed to load panel data for ${panel.pluginId}:`, e)
       }
     }
+    panels.value = panels.value.filter(p => validPanels.includes(p.pluginId))
   } catch (e) {
     console.error('Failed to load plugins:', e)
   }
@@ -50,7 +50,6 @@ const enabledPlugins = computed(() => pluginList.value.filter(p => p.enabled))
 
 const pluginColors: Record<string, string> = {
   'screenshot': '#28A745',
-  'calculator': '#9C27B0',
   'quick-notes': '#DC3545',
   'clipboard-history': '#0078D4',
   'todo': '#FF9800',
@@ -185,38 +184,22 @@ onUnmounted(() => {
           <span class="text-[14px] text-[#666666]">加载中...</span>
         </div>
 
-        <div v-else class="flex flex-col gap-[6px]">
+<div v-else class="flex flex-col gap-[6px]">
           <template v-for="panel in panels" :key="panel.id">
             <component
-              v-if="getComponent(panel.pluginId)"
+              v-if="getComponent(panel.pluginId) && panelData[panel.pluginId]"
               :is="getComponent(panel.pluginId)"
               :data="getPanelProps(panel).data"
               :execute="getPanelProps(panel).execute"
               :openPage="getPanelProps(panel).openPage"
               :refresh="getPanelProps(panel).refresh"
             />
-
-            <div v-else
-              class="rounded-lg bg-[#F5F5F5] border border-[#E0E0E0] p-[10px] flex flex-col gap-[6px] hover:bg-[#EBEBEB] cursor-pointer"
-              :style="{ minHeight: panel.height + 'px' }"
-              @click="panel.pluginId && openPluginPage(panel.pluginId)">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-[8px]">
-                  <div class="w-[32px] h-[32px] rounded-lg flex items-center justify-center" :style="{ background: getPluginColor(panel.pluginId) + '20' }">
-                    <svg class="w-[18px] h-[18px]" :style="{ color: getPluginColor(panel.pluginId) }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>
-                    </svg>
-                  </div>
-                  <span class="text-[13px] text-[#1E1E1E] font-medium">{{ panel.pluginId }}</span>
-                </div>
-                <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="m9 18 6-6-6-6"/>
-                </svg>
-              </div>
-            </div>
           </template>
 
-          <div v-for="plugin in enabledPlugins.filter(p => !panels.some(panel => panel.pluginId === p.id))" :key="plugin.id"
+<div v-for="plugin in enabledPlugins.filter(p => 
+              !panels.some(panel => panel.pluginId === p.id) && 
+              (p.hasPanel || p.hasPage)
+            )" :key="plugin.id"
             class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex items-center gap-[8px] hover:shadow-md transition-shadow cursor-pointer"
             @click="plugin.hasPage ? openPluginPage(plugin.id) : openSearch(plugin.keywords[0])">
             <div class="w-[32px] h-[32px] rounded-lg flex items-center justify-center" :style="{ background: getPluginColor(plugin.id) + '20' }">
@@ -226,7 +209,7 @@ onUnmounted(() => {
             </div>
             <div class="flex-1 flex flex-col gap-[2px]">
               <span class="text-[13px] text-[#1E1E1E] font-medium">{{ plugin.name }}</span>
-              <span class="text-[11px] text-[#999999]">{{ plugin.keywords.join(', ') }}</span>
+              <span class="text-[11px] text-[#999999]">{{ plugin.keywords.join(', ') || '无关键词' }}</span>
             </div>
             <svg class="w-[14px] h-[14px] text-[#999999]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m9 18 6-6-6-6"/>

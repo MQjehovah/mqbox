@@ -23,11 +23,6 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const progress = computed(() => {
-  if (!props.data.duration) return 0
-  return (props.data.currentTime / props.data.duration) * 100
-})
-
 function formatTime(seconds: number) {
   if (!seconds || isNaN(seconds)) return '0:00'
   const mins = Math.floor(seconds / 60)

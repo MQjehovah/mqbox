@@ -1,21 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, defineAsyncComponent } from 'vue'
 import type { PageProps } from '../../../shared/types'
 
-import TodoPage from '@plugins/todo/src/Page.vue'
-import CalculatorPage from '@plugins/calculator/src/Page.vue'
-import ScreenshotPage from '@plugins/screenshot/src/Page.vue'
-import ClipboardHistoryPage from '@plugins/clipboard-history/src/Page.vue'
-import QuickNotesPage from '@plugins/quick-notes/src/Page.vue'
-import PlayerPage from '@plugins/player/src/Page.vue'
-
 const pluginComponents: Record<string, any> = {
-  'todo': TodoPage,
-  'calculator': CalculatorPage,
-  'screenshot': ScreenshotPage,
-  'clipboard-history': ClipboardHistoryPage,
-  'quick-notes': QuickNotesPage,
-  'player': PlayerPage
+  'todo': defineAsyncComponent(() => import('@plugins/todo/src/Page.vue')),
+  'screenshot': defineAsyncComponent(() => import('@plugins/screenshot/src/Page.vue')),
+  'clipboard-history': defineAsyncComponent(() => import('@plugins/clipboard-history/src/Page.vue')),
+  'quick-notes': defineAsyncComponent(() => import('@plugins/quick-notes/src/Page.vue')),
+  'player': defineAsyncComponent(() => import('@plugins/player/src/Page.vue'))
 }
 
 const pluginId = ref('')

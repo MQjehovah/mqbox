@@ -10,6 +10,8 @@
     "keywords": [],
     "permissions": ["files:read"],
     "builtin": true,
-    "defaultSearch": true
+    "defaultSearch": true,
+    "hasPanel": false,
+    "hasPage": false
   }
 }

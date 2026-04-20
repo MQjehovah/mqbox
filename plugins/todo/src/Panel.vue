@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
 interface Todo {
   id: string
   text: string
@@ -20,10 +18,7 @@ interface Props {
   refresh: () => Promise<void>
 }
 
-const props = defineProps<Props>()
-
-const pendingTodos = computed(() => props.data.todos.filter(t => !t.completed))
-const completedTodos = computed(() => props.data.todos.filter(t => t.completed))
+defineProps<Props>()
 
 function getPriorityColor(priority: string) {
   if (priority === 'high') return '#E53935'

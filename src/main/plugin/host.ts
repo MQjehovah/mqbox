@@ -132,9 +132,11 @@ const context: PluginContext = {
     screenshot: sandbox.api.screenshot
   }
 
-  const hasPanel = module?.panel || plugin.manifest.mqbox?.hasPanel !== false
-  const hasPage = module?.page || plugin.manifest.mqbox?.hasPage !== false
-  const hasConfig = module?.config || plugin.manifest.mqbox?.hasConfig === true
+const hasPanel = !!module?.panel || plugin.manifest.mqbox?.hasPanel === true
+  const hasPage = !!module?.page || plugin.manifest.mqbox?.hasPage === true
+  const hasConfig = !!module?.config || plugin.manifest.mqbox?.hasConfig === true
+
+  console.log(`Plugin ${pluginId} hasPanel: ${hasPanel}, hasPage: ${hasPage}, module.panel: ${!!module?.panel}`)
 
   if (hasPanel) {
     console.log(`Registered panel slot for plugin ${pluginId}`)
