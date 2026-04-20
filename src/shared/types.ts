@@ -123,6 +123,7 @@ export interface PluginContext {
 export interface PluginModule<TPanelData = unknown, TPageData = unknown, TSettings = unknown> {
   panel?: Component<PanelProps<TPanelData>>
   page?: Component<PageProps<TPageData>>
+  editor?: Component
   config?: Component<ConfigProps<TSettings>>
   activate?: (context: PluginContext) => void | Promise<void>
   deactivate?: () => void | Promise<void>

@@ -2,6 +2,7 @@ import { BrowserWindow, screen, clipboard, nativeImage, dialog } from 'electron'
 import { join } from 'path'
 import { loadView } from './utils'
 import { writeFileSync } from 'fs'
+import { getPluginEditor } from './plugin/host'
 
 let editorWindow: BrowserWindow | null = null
 const pinWindows: Map<string, BrowserWindow> = new Map()
@@ -38,12 +39,14 @@ export async function showEditor(dataUrl: string): Promise<void> {
     }
   })
   
-  loadView(editorWindow, 'screenshot-editor')
+  loadView(editorWindow, 'plugin-editor:screenshot')
   
-  editorWindow.once('ready-to-show', () => {
+  editorWindow.webContents.once('did-finish-load', () => {
     editorWindow?.show()
     editorWindow?.focus()
-    editorWindow?.webContents.send('screenshot-editor:set-image', dataUrl)
+    setTimeout(() => {
+      editorWindow?.webContents.send('screenshot-editor:set-image', dataUrl)
+    }, 100)
   })
   
   editorWindow.on('closed', () => {

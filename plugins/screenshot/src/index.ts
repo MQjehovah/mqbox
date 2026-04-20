@@ -1,5 +1,6 @@
 import Panel from './Panel.vue'
 import Page from './Page.vue'
+import Editor from './Editor.vue'
 
 interface Capture {
   id: string
@@ -14,6 +15,7 @@ let lastCapture: string | null = null
 export default {
   panel: Panel,
   page: Page,
+  editor: Editor,
 
   activate(context: any) {
     context.registerCommand('getPanelData', async () => {

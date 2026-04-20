@@ -66,6 +66,18 @@ export function getPluginPage(pluginId: string): PluginPage | undefined {
   return pluginPages.get(pluginId)
 }
 
+export function getPluginEditor(pluginId: string): any {
+  const plugins = getLoadedPlugins()
+  for (const [dirName, { manifest, module }] of Array.from(plugins.entries())) {
+    const id = resolvePluginId(dirName, manifest)
+    if (id === pluginId) {
+      const mod = getPluginModule({ module })
+      return mod?.editor || null
+    }
+  }
+  return null
+}
+
 export function getPluginConfig(pluginId: string): PluginConfig | undefined {
   return pluginConfigs.get(pluginId)
 }

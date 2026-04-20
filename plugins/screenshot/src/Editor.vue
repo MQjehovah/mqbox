@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const imageSrc = ref('')
 const canvasRef = ref<HTMLCanvasElement>()
@@ -20,18 +20,25 @@ const annotations = ref<any[]>([])
 const imageWidth = ref(0)
 const imageHeight = ref(0)
 
-onMounted(async () => {
-  window.mqbox?.window.on('screenshot-editor:set-image', (dataUrl: string) => {
-    imageSrc.value = dataUrl
-  })
+const setImageHandler = (dataUrl: string) => {
+  imageSrc.value = dataUrl
+}
+
+onMounted(() => {
+  window.mqbox?.window.on('screenshot-editor:set-image', setImageHandler)
+})
+
+onUnmounted(() => {
+  window.mqbox?.window.removeListener('screenshot-editor:set-image', setImageHandler)
 })
 
 watch(imageSrc, () => {
-  if (imageSrc.value && imageRef.value) {
+  if (imageSrc.value) {
     const img = new Image()
     img.onload = () => {
       imageWidth.value = img.width
       imageHeight.value = img.height
+      redrawCanvas()
     }
     img.src = imageSrc.value
   }
@@ -268,7 +275,7 @@ const pinToDesktop = async () => {
 }
 
 const closeEditor = () => {
-  window.mqbox?.window.hide()
+  window.mqbox?.screenshot?.closeEditor()
 }
 
 const undoLast = () => {

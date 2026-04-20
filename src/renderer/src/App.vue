@@ -4,8 +4,8 @@ import SearchBox from './components/SearchBox.vue'
 import MainPanel from './components/MainPanel.vue'
 import PluginManager from './components/PluginManager.vue'
 import ScreenshotPanel from './components/ScreenshotPanel.vue'
-import ScreenshotEditor from './components/ScreenshotEditor.vue'
 import PluginPage from './components/PluginPage.vue'
+import PluginEditor from './components/PluginEditor.vue'
 
 const view = computed(() => {
   const params = new URLSearchParams(window.location.search)
@@ -13,6 +13,7 @@ const view = computed(() => {
 })
 
 const isPluginPage = computed(() => view.value.startsWith('plugin-page:'))
+const isPluginEditor = computed(() => view.value.startsWith('plugin-editor:'))
 </script>
 
 <template>
@@ -20,8 +21,8 @@ const isPluginPage = computed(() => view.value.startsWith('plugin-page:'))
   <SearchBox v-if="view === 'search'" />
   <PluginManager v-if="view === 'plugin-manager'" />
   <ScreenshotPanel v-if="view === 'screenshot'" />
-  <ScreenshotEditor v-if="view === 'screenshot-editor'" />
   <PluginPage v-if="isPluginPage" />
+  <PluginEditor v-if="isPluginEditor" />
 </template>
 
 <style>
