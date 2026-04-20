@@ -103,9 +103,10 @@ async function executeSelected() {
       console.log('Opening file with path:', path)
       window.mqbox?.file.open(path)
     } else {
-      const parts = result.action.split(':')
-      const pluginId = result.pluginId || parts[0]
-      const action = parts.slice(1).join(':')
+      const pluginId = result.pluginId
+      const action = result.action.includes(':') 
+        ? result.action.split(':').slice(1).join(':') 
+        : result.action
       
       const args = JSON.parse(JSON.stringify(result.actionArgs || {}))
       console.log('Executing plugin:', pluginId, 'action:', action, 'args:', args)

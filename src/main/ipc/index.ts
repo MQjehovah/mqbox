@@ -91,17 +91,7 @@ export function setupIPC() {
   
   ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => {
     try {
-      const fs = require('fs')
-      const path = require('path')
-      const logPath = path.join(process.cwd(), 'plugin-execute-log.txt')
-      const logContent = `plugin:execute called: id=${id}, action=${action}, args=${JSON.stringify(args)}\n`
-      fs.appendFileSync(logPath, logContent)
-      
-      console.log('plugin:execute received:', { id, action, args })
       const result = await executePlugin(id, action, args)
-      console.log('plugin:execute result:', result)
-      
-      fs.appendFileSync(logPath, `result: ${JSON.stringify(result)}\n`)
       
       const mainWindow = BrowserWindow.getAllWindows().find(w =>
         w.webContents.getURL().includes('view=main')
