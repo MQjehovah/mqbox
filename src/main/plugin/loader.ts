@@ -20,18 +20,38 @@ interface PluginManifest {
   }
 }
 
+function isDev(): boolean {
+  return !app.isPackaged
+}
+
+function getAppRoot(): string {
+  if (isDev()) {
+    return process.cwd()
+  }
+  // In production, app is packaged with asar
+  // __dirname points to dist-electron/main/, so go up 2 levels to app root
+  return join(__dirname, '..', '..')
+}
+
 function getPluginsDir(): string {
-  if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
+  if (isDev()) {
     return join(process.cwd(), 'plugins')
   }
   return join(app.getPath('userData'), 'plugins')
 }
 
 function getBuiltinPluginsDir(): string {
-  const builtinDir = join(process.cwd(), 'plugins', 'builtin')
-  console.log('Builtin plugins directory:', builtinDir)
-  console.log('Exists:', existsSync(builtinDir))
-  return builtinDir
+  if (isDev()) {
+    return join(process.cwd(), 'plugins', 'builtin')
+  }
+  return join(getAppRoot(), 'plugins', 'builtin')
+}
+
+function getExternalPluginsDir(): string {
+  if (isDev()) {
+    return join(process.cwd(), 'plugins')
+  }
+  return join(getAppRoot(), 'plugins')
 }
 
 export function loadPlugins(): Map<string, { manifest: PluginManifest; module: any }> {
@@ -39,6 +59,8 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
   
   // 加载内置插件
   const builtinDir = getBuiltinPluginsDir()
+  console.log('Builtin plugins directory:', builtinDir, 'Exists:', existsSync(builtinDir))
+  
   if (existsSync(builtinDir)) {
     const builtinDirs = readdirSync(builtinDir, { withFileTypes: true })
       .filter(d => d.isDirectory())
@@ -67,56 +89,66 @@ export function loadPlugins(): Map<string, { manifest: PluginManifest; module: a
     }
   }
 
-  // 加载用户插件
-  const pluginsDir = getPluginsDir()
-  console.log('Loading plugins from:', pluginsDir)
+  // 加载外部插件：生产环境先从 asar 内加载，再从 userData 加载
+  const externalPaths = isDev()
+    ? [getPluginsDir()]
+    : [getExternalPluginsDir(), getPluginsDir()]
 
-  if (!existsSync(pluginsDir)) {
-    console.log('Plugins directory not found')
-    return plugins
-  }
+  for (const pluginsDir of externalPaths) {
+    console.log('Loading plugins from:', pluginsDir)
 
-  const dirs = readdirSync(pluginsDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-
-  console.log('Found plugin directories:', dirs.map(d => d.name).join(', '))
-
-  for (const dir of dirs) {
-    const pluginPath = join(pluginsDir, dir.name)
-    const manifestPath = join(pluginPath, 'package.json')
-
-    if (!existsSync(manifestPath)) {
-      console.log(`No package.json for ${dir.name}`)
+    if (!existsSync(pluginsDir)) {
+      console.log('Plugins directory not found:', pluginsDir)
       continue
     }
 
-    try {
-      const manifest: PluginManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    const dirs = readdirSync(pluginsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
 
-      const distJsPath = join(pluginPath, 'dist', 'index.js')
-      const distMjsPath = join(pluginPath, 'dist', 'index.mjs')
-      const indexPath = manifest.main ? join(pluginPath, manifest.main) : join(pluginPath, 'index.js')
+    console.log('Found plugin directories:', dirs.map(d => d.name).join(', '))
 
-      let modulePath = null
-      if (existsSync(distJsPath)) {
-        modulePath = distJsPath
-      } else if (existsSync(distMjsPath)) {
-        modulePath = distMjsPath
-      } else if (existsSync(indexPath)) {
-        modulePath = indexPath
+    for (const dir of dirs) {
+      // 跳过 builtin 子目录
+      if (dir.name === 'builtin') continue
+      // 跳过已加载的插件（userData 优先级低于 asar 内）
+      if (plugins.has(dir.name)) continue
+
+      const pluginPath = join(pluginsDir, dir.name)
+      const manifestPath = join(pluginPath, 'package.json')
+
+      if (!existsSync(manifestPath)) {
+        console.log(`No package.json for ${dir.name}`)
+        continue
       }
 
-      if (modulePath) {
-        delete require.cache[require.resolve(modulePath)]
-        const module = require(modulePath)
-        plugins.set(dir.name, { manifest, module })
-        console.log(`Loaded plugin: ${dir.name} (hasPanel: ${!!(module.default?.panel || module.panel)})`)
-      } else {
-        console.log(`No module found for ${dir.name}, registering without module`)
-        plugins.set(dir.name, { manifest, module: null })
+      try {
+        const manifest: PluginManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+
+        const distJsPath = join(pluginPath, 'dist', 'index.js')
+        const distMjsPath = join(pluginPath, 'dist', 'index.mjs')
+        const indexPath = manifest.main ? join(pluginPath, manifest.main) : join(pluginPath, 'index.js')
+
+        let modulePath = null
+        if (existsSync(distJsPath)) {
+          modulePath = distJsPath
+        } else if (existsSync(distMjsPath)) {
+          modulePath = distMjsPath
+        } else if (existsSync(indexPath)) {
+          modulePath = indexPath
+        }
+
+        if (modulePath) {
+          delete require.cache[require.resolve(modulePath)]
+          const module = require(modulePath)
+          plugins.set(dir.name, { manifest, module })
+          console.log(`Loaded plugin: ${dir.name} (hasPanel: ${!!(module.default?.panel || module.panel)})`)
+        } else {
+          console.log(`No module found for ${dir.name}, registering without module`)
+          plugins.set(dir.name, { manifest, module: null })
+        }
+      } catch (error) {
+        console.error(`Failed to load plugin ${dir.name}:`, error)
       }
-    } catch (error) {
-      console.error(`Failed to load plugin ${dir.name}:`, error)
     }
   }
 

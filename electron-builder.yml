@@ -6,6 +6,10 @@ files:
   - dist/**/*
   - dist-electron/**/*
   - package.json
+  - plugins/builtin/*/dist/index.js
+  - plugins/builtin/*/package.json
+  - plugins/*/dist/index.js
+  - plugins/*/package.json
 win:
   icon: resources/icon.png
   target: nsis

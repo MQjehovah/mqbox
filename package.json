@@ -5,7 +5,8 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build && electron-builder",
+    "build:plugins": "cd plugins/builtin/todo && npm run build && cd ../../.. && cd plugins/builtin/everything && npm run build && cd ../../.. && cd plugins/clipboard-history && npm run build && cd ../.. && cd plugins/player && npm run build && cd .. && cd plugins/quick-notes && npm run build && cd .. && cd plugins/screenshot && npm run build && cd ..",
+    "build": "vue-tsc && vite build && npm run build:plugins && electron-builder",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
   },
