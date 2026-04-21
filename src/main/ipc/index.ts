@@ -93,11 +93,8 @@ export function setupIPC() {
     try {
       const result = await executePlugin(id, action, args)
       
-      const mainWindow = BrowserWindow.getAllWindows().find(w =>
-        w.webContents.getURL().includes('view=main')
-      )
-      if (mainWindow) {
-        mainWindow.webContents.send('plugin:executed', { pluginId: id, action })
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send('plugin:executed', { pluginId: id, action })
       }
       
       return result

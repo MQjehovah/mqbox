@@ -180,7 +180,7 @@ onUnmounted(() => {
             ref="inputRef"
             v-model="query"
             type="text"
-            placeholder="输入关键词搜索，或输入 cb 查看剪贴板历史..."
+            placeholder="输入关键词搜索..."
             class="flex-1 bg-transparent outline-none border-none text-lg text-gray-700"
             @input="handleInput"
             @keydown="handleKeydown"
@@ -217,7 +217,7 @@ onUnmounted(() => {
         </div>
         
         <div v-if="!query" class="mt-3 text-xs text-gray-400 text-center">
-          输入关键词搜索文件，或输入 cb 查看剪贴板历史
+          输入关键词搜索文件、插件、命令
         </div>
       </div>
     </div>

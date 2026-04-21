@@ -12,7 +12,7 @@
     "id": "player",
     "displayName": "媒体播放器",
     "keywords": ["player", "play"],
-    "permissions": ["storage", "files:read", "notification"]
+    "permissions": ["storage", "files:read", "notification", "shell"]
   },
   "devDependencies": {
     "vite": "^5.0.0",

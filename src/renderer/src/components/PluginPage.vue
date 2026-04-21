@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, defineAsyncComponent } from 'vue'
+import { ref, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import type { PageProps } from '../../../shared/types'
 
 const pluginComponents: Record<string, any> = {
@@ -28,7 +28,19 @@ onMounted(async () => {
     pluginId.value = view.replace('plugin-page:', '')
     await loadPage()
   }
+
+  window.mqbox?.window.on('plugin:executed', onPluginExecuted)
 })
+
+onUnmounted(() => {
+  window.mqbox?.window.removeListener?.('plugin:executed', onPluginExecuted)
+})
+
+const onPluginExecuted = async (data: { pluginId: string; action: string }) => {
+  if (data.pluginId === pluginId.value && data.action !== 'getPageData' && data.action !== 'updateProgress') {
+    pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
+  }
+}
 
 const loadPage = async () => {
   isLoading.value = true

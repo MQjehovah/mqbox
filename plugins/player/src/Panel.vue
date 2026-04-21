@@ -2,19 +2,32 @@
 import { computed } from 'vue'
 
 interface Track {
+  id: string
   name: string
+  source: 'local' | 'url'
   path: string
-  type: 'audio' | 'video'
+  artist?: string
+}
+
+interface PlaylistInfo {
+  id: string
+  name: string
+  trackIds: string[]
 }
 
 interface Props {
   data: {
+    playlists: PlaylistInfo[]
+    tracks: Record<string, Track>
+    currentPlaylistId: string | null
+    currentPlaylist: PlaylistInfo | null
+    currentTrackId: string | null
     currentTrack: Track | null
+    currentPlaylistTracks: Track[]
     isPlaying: boolean
     currentTime: number
     duration: number
     volume: number
-    playlist: Track[]
     playMode: 'sequence' | 'loop' | 'shuffle'
   }
   execute: (action: string, args?: unknown) => Promise<unknown>
@@ -40,7 +53,7 @@ const handlePlayPause = () => {
   if (props.data.isPlaying) {
     props.execute('pause')
   } else {
-    props.execute('play', props.data.currentTrack ? { path: props.data.currentTrack.path } : {})
+    props.execute('play', { trackId: props.data.currentTrackId })
   }
 }
 
@@ -49,25 +62,30 @@ const getModeIcon = computed(() => {
   if (props.data.playMode === 'loop') return '🔁'
   return '🎲'
 })
+
+const currentPlaylistName = computed(() => {
+  return props.data.currentPlaylist?.name || '无歌单'
+})
 </script>
 
 <template>
   <div class="player-panel rounded-lg bg-white border border-gray-200 p-2.5 flex flex-col gap-2">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
+        <div class="w-8 h-8 rounded-lg bg-pink-50 flex items-center justify-center">
           <svg class="w-4.5 h-4.5 text-pink-500" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
           </svg>
         </div>
         <div class="flex flex-col gap-0.5">
           <span class="text-sm text-gray-800 font-semibold">播放器</span>
-          <span class="text-xs text-gray-400">{{ data.playlist.length }} 首</span>
+          <span class="text-xs text-gray-400">{{ currentPlaylistName }}</span>
         </div>
       </div>
       <div class="flex items-center gap-1">
-        <button 
+        <button
           class="w-5 h-5 rounded flex items-center justify-center hover:bg-gray-100"
+          :title="data.playMode === 'sequence' ? '顺序播放' : data.playMode === 'loop' ? '循环播放' : '随机播放'"
           @click="execute('toggleMode')"
         >
           <span class="text-xs">{{ getModeIcon }}</span>
@@ -81,11 +99,14 @@ const getModeIcon = computed(() => {
     </div>
 
     <div v-if="data.currentTrack" class="flex flex-col gap-1.5">
-      <div class="text-xs text-gray-800 truncate">{{ data.currentTrack.name }}</div>
-      
+      <div class="flex flex-col">
+        <span class="text-xs text-gray-800 truncate font-medium">{{ data.currentTrack.name }}</span>
+        <span v-if="data.currentTrack.artist" class="text-xs text-gray-400 truncate">{{ data.currentTrack.artist }}</span>
+      </div>
+
       <div class="flex items-center gap-1">
         <span class="text-xs text-gray-500 w-8">{{ formatTime(data.currentTime) }}</span>
-        <div 
+        <div
           class="flex-1 h-1 rounded-full bg-gray-200 overflow-hidden cursor-pointer relative"
           @click="(e: MouseEvent) => execute('seek', { percent: e.offsetX / (e.target as HTMLElement).offsetWidth })"
         >
@@ -95,7 +116,7 @@ const getModeIcon = computed(() => {
       </div>
 
       <div class="flex items-center justify-center gap-2">
-        <button 
+        <button
           class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
           @click="execute('prev')"
         >
@@ -103,7 +124,7 @@ const getModeIcon = computed(() => {
             <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
           </svg>
         </button>
-        <button 
+        <button
           class="w-8 h-8 rounded-full bg-pink-500 flex items-center justify-center hover:bg-pink-600"
           @click="handlePlayPause"
         >
@@ -114,7 +135,7 @@ const getModeIcon = computed(() => {
             <path d="M8 5v14l11-7z"/>
           </svg>
         </button>
-        <button 
+        <button
           class="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
           @click="execute('next')"
         >
@@ -123,49 +144,35 @@ const getModeIcon = computed(() => {
           </svg>
         </button>
       </div>
-
-      <div class="flex items-center gap-1 px-1">
-        <svg class="w-3 h-3 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-        </svg>
-        <input 
-          type="range"
-          class="flex-1 h-0.5 rounded-full bg-gray-200 appearance-none cursor-pointer"
-          :value="data.volume"
-          min="0"
-          max="100"
-          @input="(e: Event) => execute('setVolume', { volume: parseInt((e.target as HTMLInputElement).value) })"
-        />
-        <span class="text-xs text-gray-500 w-6">{{ data.volume }}</span>
-      </div>
     </div>
 
     <div v-else class="flex items-center justify-center gap-2 py-1">
-      <button 
+      <button
         class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-        @click="execute('play', {})"
+        @click="openPage"
       >
         <svg class="w-4 h-4 text-gray-600" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z"/>
         </svg>
       </button>
+      <span class="text-xs text-gray-400">打开播放器添加歌曲</span>
     </div>
 
-    <div v-if="data.playlist.length > 0" class="border-t border-gray-200 pt-1.5 mt-0.5">
+    <div v-if="data.currentPlaylistTracks.length > 0" class="border-t border-gray-200 pt-1.5 mt-0.5">
       <div class="flex flex-col gap-0.5 max-h-20 overflow-y-auto">
-        <div 
-          v-for="(track, index) in data.playlist.slice(0, 5)"
-          :key="track.path"
+        <div
+          v-for="(track, index) in data.currentPlaylistTracks.slice(0, 5)"
+          :key="track.id"
           class="flex items-center gap-1 py-0.5 px-1 rounded cursor-pointer hover:bg-gray-100"
-          :class="{ 'bg-pink-50': data.currentTrack?.path === track.path }"
-          @click="execute('play', { path: track.path, name: track.name })"
+          :class="{ 'bg-pink-50': data.currentTrackId === track.id }"
+          @click="execute('play', { trackId: track.id })"
         >
           <span class="text-xs text-gray-400 w-4">{{ index + 1 }}</span>
           <span class="text-xs text-gray-800 truncate flex-1">{{ track.name }}</span>
-          <span class="text-xs text-gray-400">{{ track.type === 'audio' ? '♪' : '▶' }}</span>
+          <span class="text-xs text-gray-400">{{ track.source === 'url' ? '☁' : '♫' }}</span>
         </div>
-        <div v-if="data.playlist.length > 5" class="text-xs text-gray-400 text-center py-0.5">
-          还有 {{ data.playlist.length - 5 }} 首...
+        <div v-if="data.currentPlaylistTracks.length > 5" class="text-xs text-gray-400 text-center py-0.5">
+          还有 {{ data.currentPlaylistTracks.length - 5 }} 首...
         </div>
       </div>
     </div>
@@ -175,14 +182,5 @@ const getModeIcon = computed(() => {
 <style scoped>
 .player-panel {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #E91E63;
-  cursor: pointer;
 }
 </style>
