@@ -11,14 +11,4 @@ files:
   - plugins/*/dist/index.js
   - plugins/*/package.json
 win:
-  icon: resources/icon.png
-  target: nsis
-nsis:
-  oneClick: false
-  perMachine: true
-mac:
-  icon: resources/icon.png
-  target: dmg
-linux:
-  icon: resources/icon.png
-  target: deb
+  target: dir
