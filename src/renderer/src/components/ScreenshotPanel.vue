@@ -20,7 +20,7 @@ const virtualScreen = computed(() => {
   if (displays.value.length === 0) {
     return { left: 0, top: 0, width: 1920, height: 1080 }
   }
-  
+
   const bounds = displays.value.reduce((acc, d) => {
     const left = Math.min(acc.left, d.bounds.x)
     const top = Math.min(acc.top, d.bounds.y)
@@ -28,7 +28,7 @@ const virtualScreen = computed(() => {
     const bottom = Math.max(acc.bottom, d.bounds.y + d.bounds.height)
     return { left, top, right, bottom }
   }, { left: Infinity, top: Infinity, right: 0, bottom: 0 })
-  
+
   return {
     left: bounds.left,
     top: bounds.top,
@@ -39,7 +39,7 @@ const virtualScreen = computed(() => {
 
 onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
-  
+
   try {
     const result = await window.mqbox?.screenshot?.getAllScreens()
     if (result) {
@@ -78,14 +78,14 @@ const onMouseDown = (e: MouseEvent) => {
 
 const onMouseMove = (e: MouseEvent) => {
   if (!isSelecting.value) return
-  
+
   const pos = getScreenPosition(e.clientX, e.clientY)
-  
+
   const x = Math.min(startX.value, pos.x)
   const y = Math.min(startY.value, pos.y)
   const width = Math.abs(pos.x - startX.value)
   const height = Math.abs(pos.y - startY.value)
-  
+
   selection.value = { x, y, width, height }
 }
 
@@ -93,7 +93,7 @@ const onMouseUp = async (e: MouseEvent) => {
   if (!isSelecting.value) return
   e.preventDefault()
   isSelecting.value = false
-  
+
   if (selection.value.width > 5 && selection.value.height > 5) {
     await window.mqbox?.screenshot?.capture(
       selection.value.x,
@@ -113,14 +113,14 @@ const onKeyDown = (e: KeyboardEvent) => {
 const getDisplayStyle = (display: DisplayInfo, index: number) => {
   const left = display.bounds.x - virtualScreen.value.left
   const top = display.bounds.y - virtualScreen.value.top
-  
+
   console.log(`Display ${index} style:`, {
     left,
     top,
     width: display.bounds.width,
     height: display.bounds.height
   })
-  
+
   return {
     left: `${left}px`,
     top: `${top}px`,
@@ -132,7 +132,7 @@ const getDisplayStyle = (display: DisplayInfo, index: number) => {
 const getSelectionStyle = computed(() => {
   const left = selection.value.x - virtualScreen.value.left
   const top = selection.value.y - virtualScreen.value.top
-  
+
   return {
     left: `${left}px`,
     top: `${top}px`,
@@ -143,22 +143,22 @@ const getSelectionStyle = computed(() => {
 </script>
 
 <template>
-  <div 
+  <div
     class="screenshot-panel fixed inset-0 bg-transparent cursor-crosshair select-none overflow-hidden"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseUp"
     @contextmenu.prevent
   >
-    <div 
-      v-for="(display, index) in displays" 
+    <div
+      v-for="(display, index) in displays"
       :key="display.id"
       class="screen-container absolute"
       :style="getDisplayStyle(display, index)"
     >
-      <img 
-        v-if="images[index]" 
-        :src="images[index]" 
+      <img
+        v-if="images[index]"
+        :src="images[index]"
         class="w-full h-full object-cover opacity-40"
         draggable="false"
       />
@@ -167,8 +167,8 @@ const getSelectionStyle = computed(() => {
         <span class="opacity-70 ml-[4px]">{{ display.bounds.width }}×{{ display.bounds.height }}</span>
       </div>
     </div>
-    
-    <div 
+
+    <div
       v-if="isSelecting"
       class="selection-area absolute border-[2px] border-[#00a8ff] pointer-events-none"
       :style="getSelectionStyle"
@@ -178,15 +178,14 @@ const getSelectionStyle = computed(() => {
         {{ selection.width }} × {{ selection.height }}
       </div>
     </div>
-    
-    <div 
+
+    <div
       v-if="!isSelecting"
       class="hint fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white text-[14px] px-[20px] py-[12px] rounded-lg pointer-events-none z-50"
     >
       拖动选择截图区域，按 Esc 取消
     </div>
-    
-    <div class="mask absolute inset-0 bg-black/40 pointer-events-none"></div>
+
   </div>
 </template>
 
@@ -211,9 +210,5 @@ const getSelectionStyle = computed(() => {
 
 .size-label {
   z-index: 101;
-}
-
-.mask {
-  z-index: 5;
 }
 </style>
