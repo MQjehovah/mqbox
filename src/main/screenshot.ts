@@ -4,6 +4,21 @@ import { loadView } from './utils'
 
 let screenshotWindow: BrowserWindow | null = null
 
+/**
+ * ★ 截图缓存
+ * startScreenshot() 会先捕获桌面再创建覆盖窗口，
+ * 确保 desktopCapturer 抓取的是纯净桌面，而非覆盖窗口自身。
+ */
+let cachedScreenshot: { displays: DisplayInfo[]; images: string[] } | null = null
+
+export function getCachedScreenshot(): { displays: DisplayInfo[]; images: string[] } | null {
+  return cachedScreenshot
+}
+
+export function clearCachedScreenshot(): void {
+  cachedScreenshot = null
+}
+
 export interface DisplayInfo {
   id: number
   bounds: { x: number; y: number; width: number; height: number }
@@ -86,10 +101,10 @@ export function computePhysicalLayout(displays: { id: number; bounds: { x: numbe
   }
 
   let totalWidth = 0, totalHeight = 0
-  for (const r of rects.values()) {
+  rects.forEach(r => {
     totalWidth = Math.max(totalWidth, r.x + r.width)
     totalHeight = Math.max(totalHeight, r.y + r.height)
-  }
+  })
 
   return { rects, totalWidth: Math.max(totalWidth, 1), totalHeight: Math.max(totalHeight, 1) }
 }
@@ -519,6 +534,17 @@ export async function startScreenshot(): Promise<void> {
     return
   }
 
+  // ★ 关键修复：在创建覆盖窗口之前预先捕获桌面画面
+  //   确保 desktopCapturer 抓取的是纯净的桌面内容，而非覆盖窗口自身
+  console.log('=== Pre-capturing desktop before creating overlay window ===')
+  try {
+    cachedScreenshot = await captureAllScreens()
+    console.log('Pre-capture successful, displays:', cachedScreenshot.displays.length)
+  } catch (e) {
+    console.error('Pre-capture failed:', e)
+    cachedScreenshot = null
+  }
+
   const allDisplays = screen.getAllDisplays()
 
   console.log('Starting screenshot, displays:', allDisplays.map(d => ({
@@ -575,6 +601,7 @@ export async function startScreenshot(): Promise<void> {
 
   screenshotWindow.on('closed', () => {
     screenshotWindow = null
+    cachedScreenshot = null
   })
 }
 
@@ -583,6 +610,7 @@ export function cancelScreenshot(): void {
     screenshotWindow.close()
     screenshotWindow = null
   }
+  cachedScreenshot = null
 }
 
 export async function captureFullscreen(): Promise<string | null> {

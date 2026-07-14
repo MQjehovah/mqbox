@@ -3,7 +3,7 @@ import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProvi
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
-import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot } from '../screenshot'
+import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot, getCachedScreenshot } from '../screenshot'
 import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
 export function setupIPC() {
@@ -11,20 +11,20 @@ export function setupIPC() {
     try {
       console.log('Raw received keyword:', JSON.stringify(keyword))
       console.log('Raw received query:', JSON.stringify(query))
-      
+
       const providers = getSearchProviders()
       console.log('Search providers:', Array.from(providers.keys()))
       console.log('Searching with keyword:', keyword, 'query:', query)
-      
+
       const results: any[] = []
-      
+
       const sortedProviders = Array.from(providers.entries())
         .sort((a, b) => {
           const pa = a[1].priority ?? 100
           const pb = b[1].priority ?? 100
           return pa - pb
         })
-      
+
       for (const [kw, provider] of sortedProviders) {
         if (kw === keyword || (keyword === '' && kw === '')) {
           try {
@@ -39,7 +39,7 @@ export function setupIPC() {
           }
         }
       }
-      
+
       console.log('Final results:', results)
       return results.slice(0, 20)
     } catch (e) {
@@ -70,7 +70,7 @@ export function setupIPC() {
       return []
     }
   })
-  
+
   ipcMain.handle('plugin:enable', async (_, id: string) => {
     try {
       return enablePlugin(id)
@@ -79,7 +79,7 @@ export function setupIPC() {
       return false
     }
   })
-  
+
   ipcMain.handle('plugin:disable', async (_, id: string) => {
     try {
       return disablePlugin(id)
@@ -88,22 +88,22 @@ export function setupIPC() {
       return false
     }
   })
-  
+
   ipcMain.handle('plugin:execute', async (_, id: string, action: string, args: any) => {
     try {
       const result = await executePlugin(id, action, args)
-      
+
       for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send('plugin:executed', { pluginId: id, action })
       }
-      
+
       return result
     } catch (e) {
       console.error('plugin:execute error:', e)
       return null
     }
   })
-  
+
   ipcMain.handle('plugin:reload', async () => {
     try {
       reloadPlugins()
@@ -119,7 +119,7 @@ export function setupIPC() {
       return []
     }
   })
-  
+
   ipcMain.handle('plugin:get-panels', async () => {
     try {
       return getPluginPanels()
@@ -128,7 +128,7 @@ export function setupIPC() {
       return []
     }
   })
-  
+
   ipcMain.handle('plugin:get-page', async (_, id: string) => {
     try {
       return getPluginPage(id)
@@ -137,7 +137,7 @@ export function setupIPC() {
       return null
     }
   })
-  
+
   ipcMain.handle('plugin:get-config', async (_, id: string) => {
     try {
       return getPluginConfig(id)
@@ -146,7 +146,7 @@ export function setupIPC() {
       return null
     }
   })
-  
+
   ipcMain.handle('plugin:get-dir-name', async (_, id: string) => {
     try {
       return getPluginDirName(id)
@@ -165,7 +165,7 @@ export function setupIPC() {
       return null
     }
   })
-  
+
   ipcMain.handle('config:set', async (_, key: string, value: any) => {
     try {
       setConfig(key, value)
@@ -178,17 +178,17 @@ export function setupIPC() {
     const win = BrowserWindow.getFocusedWindow()
     if (win) win.show()
   })
-  
+
   ipcMain.on('window:hide', () => {
     const win = BrowserWindow.getFocusedWindow()
     if (win) win.hide()
   })
-  
+
   ipcMain.on('window:minimize', () => {
     const win = BrowserWindow.getFocusedWindow()
     if (win) win.hide()
   })
-  
+
   ipcMain.on('window:set-size', (_, width: number, height: number) => {
     const win = BrowserWindow.getFocusedWindow()
     if (win) win.setSize(width, height)
@@ -235,7 +235,7 @@ export function setupIPC() {
       return ''
     }
   })
-  
+
   ipcMain.handle('clipboard:write', async (_, text: string) => {
     try {
       clipboard.writeText(text)
@@ -252,7 +252,7 @@ export function setupIPC() {
       return ''
     }
   })
-  
+
   ipcMain.handle('file:showInExplorer', async (_, path: string) => {
     try {
       shell.showItemInFolder(path)
@@ -263,6 +263,13 @@ export function setupIPC() {
 
   ipcMain.handle('screenshot:get-all-screens', async () => {
     try {
+      // ★ 优先返回 pre-capture 的缓存数据（startScreenshot 中先捕获再显示窗口）
+      const cached = getCachedScreenshot()
+      if (cached) {
+        console.log('screenshot:get-all-screens → returning cached pre-capture data')
+        return cached
+      }
+      // 无缓存时回退到实时捕获（兼容非覆盖窗口模式调用）
       return await captureAllScreens()
     } catch (e) {
       console.error('screenshot:get-all-screens error:', e)
@@ -313,6 +320,28 @@ ipcMain.on('screenshot:cancel', () => {
       pinImage(dataUrl)
     } catch (e) {
       console.error('screenshot:pin error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:pin-move', (event, x: number, y: number) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (win && !win.isDestroyed()) {
+        win.setPosition(Math.round(x), Math.round(y))
+      }
+    } catch (e) {
+      console.error('screenshot:pin-move error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:pin-close', (event) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (win && !win.isDestroyed()) {
+        win.close()
+      }
+    } catch (e) {
+      console.error('screenshot:pin-close error:', e)
     }
   })
 

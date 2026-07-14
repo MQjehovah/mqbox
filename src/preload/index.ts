@@ -52,6 +52,8 @@ screenshot: {
     cancel: () => ipcRenderer.send('screenshot:cancel'),
     showEditor: (dataUrl: string) => ipcRenderer.send('screenshot:show-editor', dataUrl),
     pin: (dataUrl: string) => ipcRenderer.send('screenshot:pin', dataUrl),
+    pinMove: (x: number, y: number) => ipcRenderer.send('screenshot:pin-move', x, y),
+    pinClose: () => ipcRenderer.send('screenshot:pin-close'),
     save: (dataUrl: string) => ipcRenderer.send('screenshot:save', dataUrl),
     closeEditor: () => ipcRenderer.send('screenshot:close-editor'),
     closeAllPins: () => ipcRenderer.send('screenshot:close-all-pins')

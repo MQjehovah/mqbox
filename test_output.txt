@@ -1,0 +1,72 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mE:/mqbox[39m
+
+ [31m❯[39m tests/integration/ipc-pin.test.ts [2m([22m[2m9 tests[22m[2m | [22m[31m9 failed[39m[2m)[22m[32m 61[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin 应创建钉图窗口（调用 pinImage）[39m[32m 39[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin-move 应设置窗口位置[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin-move 应处理已销毁的窗口（不报错）[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin-move 应取整坐标[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin-close 应关闭窗口[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m screenshot:pin-close 处理已销毁窗口应安全[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m screenshot:close-all-pins 应关闭所有钉图窗口[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m screenshot:close-all-pins 无窗口时不应报错[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 预加载脚本应将 pin/pinMove/pinClose/closeAllPins 暴露到 window.mqbox.screenshot[39m[32m 19[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 9 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin 应创建钉图窗口（调用 pinImage）
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin-move 应设置窗口位置
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin-move 应处理已销毁的窗口（不报错）
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin-move 应取整坐标
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin-close 应关闭窗口
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:pin-close 处理已销毁窗口应安全
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:close-all-pins 应关闭所有钉图窗口
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mIPC 集成测试 - 钉图功能[2m > [22mscreenshot:close-all-pins 无窗口时不应报错
+[31m[1mError[22m: [vitest] No "default" export is defined on the "fs" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+[39m
+vi.mock(import("fs"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+[36m [2m❯[22m src/main/pinWindow.ts:[2m1:57[22m[39m
+    [90m  1|[39m import { BrowserWindow, screen, clipboard, nativeImage, dialog } from …
+    [90m   |[39m                                                         [31m^[39m
+    [90m  2|[39m [35mimport[39m { join } [35mfrom[39m [32m'path'[39m
+    [90m  3|[39m [35mimport[39m { loadView } [35mfrom[39m [32m'./utils'[39m
+[90m [2m❯[22m tests/integration/ipc-pin.test.ts:[2m145:23[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/integration/ipc-pin.test.ts[2m > [22mPreload API 绑定验证[2m > [22m预加载脚本应将 pin/pinMove/pinClose/closeAllPins 暴露到 window.mqbox.screenshot
+[31m[1mError[22m: [vitest] No "contextBridge" export is defined on the "electron" mock. Did you forget to return it from "vi.mock"?
+If you need to partially mock a module, you can use "importOriginal" helper inside:
+[39m
+vi.mock(import("electron"), async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    // your mocked methods
+  }
+})
+
+[36m [2m❯[22m src/preload/index.ts:[2m63:1[22m[39m
+    [90m 61|[39m }
+    [90m 62|[39m
+    [90m 63|[39m contextBridge[33m.[39m[34mexposeInMainWorld[39m([32m'mqbox'[39m[33m,[39m api)
+    [90m   |[39m [31m^[39m
+[90m [2m❯[22m tests/integration/ipc-pin.test.ts:[2m273:24[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m9 failed[39m[22m[90m (9)[39m
+[2m   Start at [22m 01:26:18
+[2m   Duration [22m 796ms[2m (transform 67ms, setup 0ms, import 75ms, tests 61ms, environment 453ms)[22m
+

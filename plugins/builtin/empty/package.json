@@ -1,0 +1,24 @@
+{
+  "name": "mqbox-builtin-empty",
+  "version": "1.0.0",
+  "displayName": "空白插件",
+  "description": "一个用作脚手架的空白插件模板，演示插件系统的所有核心能力",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "mqbox": {
+    "id": "empty",
+    "displayName": "空白插件",
+    "keywords": ["empty", "template", "demo"],
+    "permissions": ["storage"],
+    "builtin": true
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "typescript": "~5.6.0"
+  }
+}

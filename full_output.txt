@@ -1,0 +1,74 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mE:/mqbox[39m
+
+ [31m❯[39m tests/unit/pinWindow.test.ts [2m([22m[2m22 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 46[2mms[22m[39m
+     [32m✓[39m 注入的 JS 应包含 #pin-img 和 #close-btn 元素[32m 30[2mms[22m[39m
+     [32m✓[39m 注入的 JS 应将图片 src 设为传入的 dataUrl[32m 0[2mms[22m[39m
+     [32m✓[39m 注入的 JS 应包含拖拽事件处理（mousedown/mousemove/mouseup + isDragging + pinMove）[32m 0[2mms[22m[39m
+     [32m✓[39m 注入的 JS 应调用 pinMove IPC（增量法）[32m 0[2mms[22m[39m
+     [32m✓[39m 注入的 JS 应包含关闭按钮点击事件 + stopPropagation[32m 0[2mms[22m[39m
+     [32m✓[39m 关闭按钮 hover 应变化背景色[32m 0[2mms[22m[39m
+     [32m✓[39m 点击关闭按钮不应触发拖拽 (e.target.id === close-btn 时跳过 mousedown)[32m 0[2mms[22m[39m
+     [32m✓[39m 应创建透明无框置顶窗口[32m 0[2mms[22m[39m
+     [32m✓[39m 应居中显示在屏幕上[32m 0[2mms[22m[39m
+     [32m✓[39m 图片宽超过 400px 时应缩放到 400px[32m 0[2mms[22m[39m
+     [32m✓[39m 图片高超过 300px 时应缩放到 300px[32m 0[2mms[22m[39m
+     [32m✓[39m 应注入交互式 JS[32m 0[2mms[22m[39m
+     [32m✓[39m 应支持多钉图窗口（连续调用 pinImage 多次）[32m 1[2mms[22m[39m
+     [32m✓[39m 应使用原生图片尺寸作为窗口尺寸基准[32m 0[2mms[22m[39m
+     [32m✓[39m 用户确认保存路径后应写入文件[32m 0[2mms[22m[39m
+     [32m✓[39m 用户取消保存时应不写入文件[32m 0[2mms[22m[39m
+     [32m✓[39m 应将图片写入剪贴板[32m 0[2mms[22m[39m
+     [32m✓[39m 编辑器窗口存在时应关闭并清空引用[32m 0[2mms[22m[39m
+     [32m✓[39m 编辑器窗口不存在时调用 closeEditor 不应报错[32m 1[2mms[22m[39m
+[31m     [31m×[31m 应关闭所有钉图窗口[39m[32m 6[2mms[22m[39m
+     [32m✓[39m 无钉图窗口时调用 closeAllPins 不应报错[32m 1[2mms[22m[39m
+[31m     [31m×[31m 首次调用应创建编辑器窗口，重复调用应复用已存在的窗口[39m[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/unit/pinWindow.test.ts[2m > [22mpinWindow.ts - closeAllPins[2m > [22m应关闭所有钉图窗口
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/unit/pinWindow.test.ts:[2m396:23[22m[39m
+    [90m394|[39m
+    [90m395|[39m     const allClosed = createdWindows.every((w: any) => w.isDestroyedFl…
+    [90m396|[39m     [34mexpect[39m(allClosed)[33m.[39m[34mtoBe[39m([35mtrue[39m)
+    [90m   |[39m                       [31m^[39m
+    [90m397|[39m   })
+    [90m398|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/unit/pinWindow.test.ts[2m > [22mpinWindow.ts - showEditor[2m > [22m首次调用应创建编辑器窗口，重复调用应复用已存在的窗口
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m tests/unit/pinWindow.test.ts:[2m422:28[22m[39m
+    [90m420|[39m     [34mexpect[39m(win[33m.[39mwidth)[33m.[39m[34mtoBeGreaterThan[39m([34m0[39m)
+    [90m421|[39m     [34mexpect[39m(win[33m.[39mheight)[33m.[39m[34mtoBeGreaterThan[39m([34m0[39m)
+    [90m422|[39m     [34mexpect[39m(win[33m.[39mshowCalled)[33m.[39m[34mtoBe[39m([35mtrue[39m)
+    [90m   |[39m                            [31m^[39m
+    [90m423|[39m     [34mexpect[39m(win[33m.[39mfocusCalled)[33m.[39m[34mtoBe[39m([35mtrue[39m)
+    [90m424|[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m20 passed[39m[22m[90m (22)[39m
+[2m   Start at [22m 01:18:30
+[2m   Duration [22m 725ms[2m (transform 57ms, setup 0ms, import 77ms, tests 46ms, environment 419ms)[22m
+

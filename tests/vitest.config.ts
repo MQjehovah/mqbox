@@ -17,8 +17,13 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/main/screenshot.ts', 'src/renderer/src/components/ScreenshotPanel.vue'],
-      exclude: ['node_modules', 'tests'],
+      include: [
+        'src/main/screenshot.ts',
+        'src/main/plugin/**/*.ts',
+        'src/renderer/src/components/ScreenshotPanel.vue',
+        'src/shared/types.ts'
+      ],
+      exclude: ['node_modules', 'tests', 'dist'],
       thresholds: {
         statements: 50,
         branches: 40,
