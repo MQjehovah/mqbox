@@ -27,14 +27,18 @@ export async function getDisplays(): Promise<DisplayInfo[]> {
 
 /**
  * 将 source 与 display 进行匹配
- * 策略栈: display_id 匹配 → 缩略图尺寸匹配 → 按 position 排序后索引匹配
+ * 策略栈: display_id 匹配 → 缩略图尺寸匹配 → 索引回退
+ *
+ * ★ 注意: 该函数不感知物理位置。同尺寸多屏时请调用方先对 displays 和 sources
+ *   分别按位置排序再顺序匹配（见 captureAllScreens 情况B），
+ *   这是最可靠的匹配方式。
  */
 function matchSourceToDisplay(
   display: DisplayInfo,
   sources: Electron.DesktopCapturerSource[],
   usedSourceIndices: Set<number>,
 ): Electron.DesktopCapturerSource | null {
-  // 策略1: display_id 精确匹配（Electron 官方推荐方式）
+  // 策略1: display_id 精确匹配
   for (let si = 0; si < sources.length; si++) {
     if (usedSourceIndices.has(si)) continue
     const s = sources[si]
@@ -59,7 +63,7 @@ function matchSourceToDisplay(
     }
   }
 
-  // 策略3: 按 position 排序后取第一个可用源
+  // 策略3: 索引回退
   for (let si = 0; si < sources.length; si++) {
     if (usedSourceIndices.has(si)) continue
     console.log(`  ✓ 索引回退匹配: display ${display.label} → source[${si}]`)
@@ -142,21 +146,58 @@ export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; im
   } else {
     // === 情况B: 多源（每个显示器一个源）或有单显示器 ===
     console.log('→ 情况B: 多源模式，逐显示器匹配')
-    const usedSources = new Set<number>()
 
-    // 按位置排序显示器（左→右，上→下），先匹配位置靠前的
+    // ★ 按物理位置排序显示器（左→右，上→下）
     const sortedDisplays = [...displays].sort((a, b) => {
       if (a.bounds.x !== b.bounds.x) return a.bounds.x - b.bounds.x
       return a.bounds.y - b.bounds.y
     })
 
-    // 收集匹配结果
-    const matchResults = new Map<number, Electron.DesktopCapturerSource>()
+    // ★ 同样按物理位置排序 sources
+    //    sources 在 Windows 上通常已按左→右顺序排列，
+    //    但为了稳健，通过 display_id/缩略图尺寸找到每个 source 对应的 display，
+    //    再用 display 的 bounds.x 排序
+    const allDisplays = screen.getAllDisplays()
+    const sortedSources = [...sources].map((s, idx) => {
+      let pos = idx * 9999 // 默认按原始顺序
+      // 尝试通过 display_id 找对应 display
+      let matchedDisp = allDisplays.find(d => s.display_id && String(d.id) === s.display_id)
+      if (!matchedDisp) {
+        // 尝试通过缩略图尺寸匹配
+        const { width, height } = s.thumbnail.getSize()
+        matchedDisp = allDisplays.find(d => {
+          const ew = Math.floor(d.bounds.width * d.scaleFactor)
+          const eh = Math.floor(d.bounds.height * d.scaleFactor)
+          return Math.abs(width - ew) <= 2 && Math.abs(height - eh) <= 2
+        })
+      }
+      if (matchedDisp) {
+        pos = matchedDisp.bounds.x
+      }
+      return { source: s, index: idx, pos }
+    }).sort((a, b) => a.pos - b.pos)
 
+    // ★ 顺序匹配：第 N 个 display ↔ 第 N 个 source
+    const matchResults = new Map<number, Electron.DesktopCapturerSource>()
+    const usedSourceIndices = new Set<number>()
+
+    for (let si = 0; si < sortedSources.length && si < sortedDisplays.length; si++) {
+      const display = sortedDisplays[si]
+      const sourceInfo = sortedSources[si]
+      if (!usedSourceIndices.has(sourceInfo.index)) {
+        matchResults.set(display.id, sourceInfo.source)
+        usedSourceIndices.add(sourceInfo.index)
+        console.log(`  ✓ 位置排序匹配: display ${display.label} (x=${display.bounds.x}) → source[${sourceInfo.index}]`)
+      }
+    }
+
+    // 对仍未匹配的 display 使用传统匹配方式
     for (const display of sortedDisplays) {
-      const source = matchSourceToDisplay(display, sources, usedSources)
-      if (source) {
-        matchResults.set(display.id, source)
+      if (!matchResults.has(display.id)) {
+        const source = matchSourceToDisplay(display, sources, usedSourceIndices)
+        if (source) {
+          matchResults.set(display.id, source)
+        }
       }
     }
 
@@ -192,6 +233,10 @@ export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; im
 
 /**
  * 在多个 source 中找到与指定 display 匹配的那个
+ *
+ * ★ 核心策略：按物理位置排序匹配
+ *   将 sources 和 displays 分别按位置排序，然后按序号顺序匹配，
+ *   这是同尺寸多屏下最可靠的匹配方式。
  */
 function findSourceForDisplay(
   displayId: number,
@@ -199,14 +244,14 @@ function findSourceForDisplay(
   displayScaleFactor: number,
   sources: Electron.DesktopCapturerSource[],
 ): Electron.DesktopCapturerSource | null {
-  // 策略1: display_id 匹配（Electron 官方推荐）
+  // 策略1: display_id 匹配
   for (const s of sources) {
     if (s.display_id && String(displayId) === s.display_id) {
       return s
     }
   }
 
-  // 策略2: 缩略图尺寸匹配（适用于不同尺寸的显示器）
+  // 策略2: 缩略图尺寸匹配
   const expectedW = Math.floor(displayBounds.width * displayScaleFactor)
   const expectedH = Math.floor(displayBounds.height * displayScaleFactor)
   for (const s of sources) {
@@ -221,7 +266,36 @@ function findSourceForDisplay(
     return sources[0]
   }
 
-  // 策略4: 索引回退
+  // 策略4: 按物理位置排序匹配（同尺寸多屏场景的关键策略）
+  // 将 sources 按对应 display 的物理 x 坐标排序，然后通过 displayId 找到序号
+  const allDisplays = screen.getAllDisplays()
+  const sortedDisplays = [...allDisplays].sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y)
+  const targetDisplayIndex = sortedDisplays.findIndex(d => d.id === displayId)
+
+  if (targetDisplayIndex >= 0) {
+    // 将 sources 也按对应 display 的 x 坐标排序
+    const sortedSources = [...sources].map((s, idx) => {
+      let pos = idx * 9999
+      let matchedDisp = allDisplays.find(d => s.display_id && String(d.id) === s.display_id)
+      if (!matchedDisp) {
+        const { width, height } = s.thumbnail.getSize()
+        matchedDisp = allDisplays.find(d => {
+          const ew = Math.floor(d.bounds.width * d.scaleFactor)
+          const eh = Math.floor(d.bounds.height * d.scaleFactor)
+          return Math.abs(width - ew) <= 2 && Math.abs(height - eh) <= 2
+        })
+      }
+      if (matchedDisp) pos = matchedDisp.bounds.x
+      return { source: s, index: idx, pos }
+    }).sort((a, b) => a.pos - b.pos)
+
+    if (targetDisplayIndex < sortedSources.length) {
+      return sortedSources[targetDisplayIndex].source
+    }
+  }
+
+  // 策略5: 索引回退
+  console.warn(`findSourceForDisplay: 无法精确匹配 display ${displayId}，回退到 sources[0]`)
   return sources[0] || null
 }
 
@@ -349,21 +423,18 @@ export async function captureRegion(screenX: number, screenY: number, width: num
     // 与多块显示器相交 → 需要从多块源分别裁剪并合成
     console.log('captureRegion (跨屏合成):', {
       screenX, screenY, width, height,
-      displayCount: intersectingDisplays.length
+      displayCount: intersectingDisplays.length,
+      maxScale
     })
 
-    // 计算选区在虚拟屏幕中的位置（用于合成时定位各部件）
-    const selectionVirtualLeft = screenX - virtualLeft
-    const selectionVirtualTop = screenY - virtualTop
+    // 【修复】使用最大 scaleFactor 创建合成画布
+    // 各显示器裁剪块按其在虚拟屏中的位置拼合
+    const compositeW = Math.floor(width * maxScale)
+    const compositeH = Math.floor(height * maxScale)
+    const compositeBuffer = Buffer.alloc(compositeW * compositeH * 4, 0) // BGRA, init to transparent black
 
-    // 创建用于合成的 NativeImage
-    const composited = nativeImage.createEmpty()
-
-    // 按显示器从左到右排序，逐块裁剪
+    // 按显示器从左到右排序
     const sortedDisplays = [...intersectingDisplays].sort((a, b) => a.bounds.x - b.bounds.x)
-    let resultBitmap: Buffer | null = null
-    let resultWidth = 0
-    let resultHeight = 0
 
     for (let di = 0; di < sortedDisplays.length; di++) {
       const d = sortedDisplays[di]
@@ -376,7 +447,7 @@ export async function captureRegion(screenX: number, screenY: number, width: num
 
       const thumbSize = source.thumbnail.getSize()
 
-      // 计算该交集在当前显示器缩略图中的裁剪区域
+      // 计算该交集在当前显示器缩略图中的裁剪区域（使用该显示器的 scaleFactor）
       const localX = intersection.x - d.bounds.x
       const localY = intersection.y - d.bounds.y
       const cropX = Math.floor(localX * d.scaleFactor)
@@ -384,58 +455,53 @@ export async function captureRegion(screenX: number, screenY: number, width: num
       const cropW = Math.floor(intersection.width * d.scaleFactor)
       const cropH = Math.floor(intersection.height * d.scaleFactor)
 
-      const safeCropX = Math.min(cropX, thumbSize.width - 1)
-      const safeCropY = Math.min(cropY, thumbSize.height - 1)
+      const safeCropX = Math.min(Math.max(cropX, 0), thumbSize.width - 1)
+      const safeCropY = Math.min(Math.max(cropY, 0), thumbSize.height - 1)
       const safeCropW = Math.min(cropW, thumbSize.width - safeCropX)
       const safeCropH = Math.min(cropH, thumbSize.height - safeCropY)
 
-      const cropped = source.thumbnail.crop({ x: safeCropX, y: safeCropY, width: safeCropW, height: safeCropH })
-      const croppedBuffer = cropped.toBitmap()
+      if (safeCropW <= 0 || safeCropH <= 0) continue
 
-      if (!resultBitmap) {
-        // 第一个显示器：初始化合成结果
-        resultWidth = width
-        resultHeight = height
-        resultBitmap = Buffer.alloc(resultWidth * resultHeight * 4, 0) // RGBA
+      let cropped = source.thumbnail.crop({ x: safeCropX, y: safeCropY, width: safeCropW, height: safeCropH })
+
+      // 如果 scaleFactor 不同，缩放到 maxScale
+      if (d.scaleFactor !== maxScale) {
+        const ratio = maxScale / d.scaleFactor
+        cropped = cropped.resize({
+          width: Math.floor(safeCropW * ratio),
+          height: Math.floor(safeCropH * ratio)
+        })
       }
 
-      // 将裁剪的像素复制到合成结果中的正确位置
-      const pasteX = Math.floor((intersection.x - screenX) * d.scaleFactor)
-      const pasteY = Math.floor((intersection.y - screenY) * d.scaleFactor)
+      const croppedSize = cropped.getSize()
+      const croppedBuffer = cropped.toBitmap()
 
-      // 使用 NativeImage 的 toDataURL 并合成
-      // 简化方案：直接返回裁剪的第一块区域
-      // 对于跨屏选区，优先使用情况A（单源虚拟屏模式），情况B较少出现
+      // 计算在合成画布中的粘贴位置（以 maxScale 为单位）
+      const pasteX = Math.floor((intersection.x - screenX) * maxScale)
+      const pasteY = Math.floor((intersection.y - screenY) * maxScale)
+
+      // 逐行复制像素到 compositeBuffer
+      for (let row = 0; row < croppedSize.height; row++) {
+        const srcRow = row * croppedSize.width * 4
+        const dstRow = (pasteY + row) * compositeW * 4 + pasteX * 4
+        if (dstRow + croppedSize.width * 4 <= compositeBuffer.length) {
+          croppedBuffer.copy(compositeBuffer, dstRow, srcRow, srcRow + croppedSize.width * 4)
+        }
+      }
     }
 
-    // 简化处理：返回主要显示器的裁剪结果
-    const primaryDisplay = intersectingDisplays[0]
-    const primarySource = findSourceForDisplay(primaryDisplay.id, primaryDisplay.bounds, primaryDisplay.scaleFactor, sources)
-    if (!primarySource) return null
-
-    const thumbSize = primarySource.thumbnail.getSize()
-    const relativeX = Math.max(0, screenX - primaryDisplay.bounds.x)
-    const relativeY = Math.max(0, screenY - primaryDisplay.bounds.y)
-    const cropX = Math.floor(relativeX * primaryDisplay.scaleFactor)
-    const cropY = Math.floor(relativeY * primaryDisplay.scaleFactor)
-    const cropWidth = Math.floor(width * primaryDisplay.scaleFactor)
-    const cropHeight = Math.floor(height * primaryDisplay.scaleFactor)
-
-    const cropped = primarySource.thumbnail.crop({
-      x: Math.min(cropX, thumbSize.width - 1),
-      y: Math.min(cropY, thumbSize.height - 1),
-      width: Math.min(cropWidth, thumbSize.width - cropX),
-      height: Math.min(cropHeight, thumbSize.height - cropY)
+    // 从合成缓冲创建 NativeImage
+    const composited = nativeImage.createFromBuffer(compositeBuffer, {
+      width: compositeW,
+      height: compositeH
     })
 
-    console.log('captureRegion (跨屏回退-主屏裁剪):', {
-      screenX, screenY, width, height,
-      displayBounds: primaryDisplay.bounds,
-      cropX, cropY, cropWidth, cropHeight,
-      thumbSize
+    console.log('captureRegion (跨屏合成完成):', {
+      compositeW, compositeH,
+      displayCount: intersectingDisplays.length
     })
 
-    return cropped.toDataURL()
+    return composited.toDataURL()
   }
 }
 
@@ -478,7 +544,10 @@ export async function startScreenshot(): Promise<void> {
     x: combinedBounds.left,
     y: combinedBounds.top,
     frame: false,
-    transparent: true,
+    // 注意：不使用 transparent:true，因为 Electron 透明窗口跨不同 DPI 显示器时
+    // GPU 合成异常，会导致 rgba() 蒙版及部分 fixed 定位元素渲染失败
+    // 改用不透明窗口 + 截屏图片展示，效果一致且渲染可靠
+    backgroundColor: '#1a1a2e',
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,

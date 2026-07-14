@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 interface DisplayInfo {
   id: number
@@ -17,6 +17,8 @@ const startX = ref(0)
 const startY = ref(0)
 const virtualLeft = ref(0)
 const virtualTop = ref(0)
+const virtualWidth = ref(0)
+const virtualHeight = ref(0)
 
 /**
  * 计算虚拟屏幕范围（所有显示器的 bounding box）
@@ -25,6 +27,8 @@ function calcVirtualScreen() {
   if (displays.value.length === 0) {
     virtualLeft.value = 0
     virtualTop.value = 0
+    virtualWidth.value = 0
+    virtualHeight.value = 0
     return
   }
 
@@ -37,75 +41,16 @@ function calcVirtualScreen() {
   }
   virtualLeft.value = minX
   virtualTop.value = minY
+  virtualWidth.value = maxX - minX
+  virtualHeight.value = maxY - minY
 }
 
 /**
- * 获取每块屏幕的蒙版样式（独立蒙版）
- * 每块屏幕的蒙版只覆盖自身区域，clip-path 坐标都在该蒙版内部，不会出现跨屏大数值
- */
-function getMaskStyle(display: DisplayInfo): Record<string, string> {
-  const left = display.bounds.x - virtualLeft.value
-  const top = display.bounds.y - virtualTop.value
-
-  const style: Record<string, string> = {
-    position: 'fixed',
-    left: `${left}px`,
-    top: `${top}px`,
-    width: `${display.bounds.width}px`,
-    height: `${display.bounds.height}px`,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    pointerEvents: 'none'
-  }
-
-  // 仅在正在选择且有实际选区时，计算与当前屏幕的相交区域，抠洞
-  if (isSelecting.value && selection.value.width > 2 && selection.value.height > 2) {
-    const selLeft = selection.value.x
-    const selTop = selection.value.y
-    const selRight = selLeft + selection.value.width
-    const selBottom = selTop + selection.value.height
-
-    const dLeft = display.bounds.x
-    const dTop = display.bounds.y
-    const dRight = dLeft + display.bounds.width
-    const dBottom = dTop + display.bounds.height
-
-    // ★ 计算选区与当前屏幕的交集（在屏幕内部坐标中）
-    const interLeft = Math.max(selLeft, dLeft)
-    const interTop = Math.max(selTop, dTop)
-    const interRight = Math.min(selRight, dRight)
-    const interBottom = Math.min(selBottom, dBottom)
-
-    // 如果选区与当前屏幕有交集，才在该屏幕蒙版上抠洞
-    if (interLeft < interRight && interTop < interBottom) {
-      // 将交集坐标转换为「相对于当前蒙版元素」的坐标
-      const relLeft = interLeft - dLeft
-      const relTop = interTop - dTop
-      const relRight = interRight - dLeft
-      const relBottom = interBottom - dTop
-
-      style.clipPath = `polygon(evenodd,
-        0% 0%,
-        100% 0%,
-        100% 100%,
-        0% 100%,
-        ${relLeft}px ${relTop}px,
-        ${relRight}px ${relTop}px,
-        ${relRight}px ${relBottom}px,
-        ${relLeft}px ${relBottom}px
-      )`
-    }
-    // 如果不相交：不设 clip-path，保持全屏半透明黑色覆盖（蒙版全遮该屏幕）
-  }
-
-  return style
-}
-
-/**
- * 获取每块屏幕的截图画面样式
+ * 获取每块屏幕的截图画面样式（使用 position:absolute 相对于容器）
  */
 function getDisplayStyle(display: DisplayInfo): Record<string, string> {
   return {
-    position: 'fixed',
+    position: 'absolute',
     left: `${display.bounds.x - virtualLeft.value}px`,
     top: `${display.bounds.y - virtualTop.value}px`,
     width: `${display.bounds.width}px`,
@@ -114,22 +59,95 @@ function getDisplayStyle(display: DisplayInfo): Record<string, string> {
 }
 
 /**
- * 获取选区指示器的样式
+ * 蒙版样式计算
+ * - 未选择时：全屏半透明黑色覆盖
+ * - 选择时：使用 clip-path polygon 在选区位置"挖洞"
  */
-const getSelectionStyle = (): Record<string, string> => {
+const maskStyle = computed<Record<string, string>>(() => {
+  const baseStyle: Record<string, string> = {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: '100%',
+    height: '100%',
+    background: 'rgba(0, 0, 0, 0.5)',
+    pointerEvents: 'none',
+    zIndex: '40'
+  }
+
+  // 未选择状态：全屏覆盖，无挖洞
+  if (!isSelecting.value || selection.value.width < 3 || selection.value.height < 3) {
+    return baseStyle
+  }
+
+  // 选择状态：用 clip-path 在选区位置挖洞
+  const sx = selection.value.x - virtualLeft.value
+  const sy = selection.value.y - virtualTop.value
+  const sw = selection.value.width
+  const sh = selection.value.height
+
+  // ★ clip-path polygon 挖洞原理：
+  //   先画外矩形（顺时针），再画内矩形（逆时针），形成"回"字形路径
+  //   外矩形覆盖整个容器，内矩形从蒙版中挖出选区区域
+  //   使用 evenodd 填充规则确保内部区域被挖空
+  const w = virtualWidth.value
+  const h = virtualHeight.value
+  const l = sx
+  const t = sy
+  const r = sx + sw
+  const b = sy + sh
+
+  // 外框顺时针 + 内框逆时针 → nonzero fill rule 生成挖洞效果
+  baseStyle.clipPath = `polygon(
+    0px 0px,
+    ${w}px 0px,
+    ${w}px ${h}px,
+    0px ${h}px,
+    0px 0px,
+    ${l}px ${t}px,
+    ${r}px ${t}px,
+    ${r}px ${b}px,
+    ${l}px ${b}px,
+    ${l}px ${t}px
+  )`
+
+  return baseStyle
+})
+
+/**
+ * 选区指示器样式（仅显示边框 + 尺寸标签，不参与蒙版）
+ */
+const selectionStyle = computed<Record<string, string>>(() => {
   const left = selection.value.x - virtualLeft.value
   const top = selection.value.y - virtualTop.value
 
   return {
-    position: 'fixed',
+    position: 'absolute',
     left: `${left}px`,
     top: `${top}px`,
     width: `${selection.value.width}px`,
     height: `${selection.value.height}px`,
     border: '2px solid #00a8ff',
-    pointerEvents: 'none' as const
+    pointerEvents: 'none',
+    zIndex: '50'
   }
-}
+})
+
+/**
+ * 容器样式（动态宽高匹配虚拟屏幕尺寸）
+ */
+const panelStyle = computed<Record<string, string>>(() => {
+  return {
+    position: 'absolute',
+    left: '0',
+    top: '0',
+    width: `${virtualWidth.value}px`,
+    height: `${virtualHeight.value}px`,
+    background: 'transparent',
+    cursor: 'crosshair',
+    userSelect: 'none'
+  }
+})
 
 onMounted(async () => {
   document.addEventListener('keydown', onKeyDown)
@@ -224,7 +242,8 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 <template>
   <div
-    class="screenshot-panel fixed inset-0 bg-transparent cursor-crosshair select-none"
+    class="screenshot-panel"
+    :style="panelStyle"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
     @mouseup="onMouseUp"
@@ -249,21 +268,19 @@ const onKeyDown = (e: KeyboardEvent) => {
       </div>
     </div>
 
-    <!-- ★ 每屏幕独立蒙版（替代旧的单一大蒙版）
-         每块屏幕的蒙版只覆盖自身区域，clip-path 坐标都是相对于屏幕自身的，
-         不会出现大数值跨屏坐标问题 -->
+    <!-- ★ 统一蒙版层（clip-path 抠洞实现）
+         始终存在，未选择时全屏覆盖（clip-path: none），
+         选择时使用 polygon 在选区位置挖洞 -->
     <div
-      v-for="(display, index) in displays"
-      :key="'mask-' + display.id"
-      class="screen-mask"
-      :style="getMaskStyle(display)"
+      class="mask-layer"
+      :style="maskStyle"
     ></div>
 
-    <!-- 选区指示器（边框 + 大小标签） -->
+    <!-- 选区指示器（仅边框 + 半透明填充，不参与蒙版） -->
     <div
       v-if="isSelecting && selection.width > 2 && selection.height > 2"
       class="selection-indicator"
-      :style="getSelectionStyle()"
+      :style="selectionStyle"
     >
       <div class="absolute inset-0 bg-[#00a8ff]/10"></div>
       <div class="size-label absolute -top-[28px] left-0 bg-[#00a8ff] text-white text-[12px] px-[10px] py-[4px] rounded whitespace-nowrap pointer-events-none">
@@ -274,7 +291,7 @@ const onKeyDown = (e: KeyboardEvent) => {
     <!-- 操作提示 -->
     <div
       v-if="!isSelecting"
-      class="hint fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white text-[14px] px-[20px] py-[12px] rounded-lg pointer-events-none z-[200]"
+      class="hint absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/70 text-white text-[14px] px-[20px] py-[12px] rounded-lg pointer-events-none z-[200]"
     >
       拖动选择截图区域，按 Esc 取消
     </div>
@@ -284,7 +301,13 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 <style scoped>
 .screenshot-panel {
+  position: absolute;
+  left: 0;
+  top: 0;
   z-index: 9999;
+  background: transparent;
+  cursor: crosshair;
+  user-select: none;
 }
 
 /* 每块显示器的截图画面 */
@@ -297,16 +320,14 @@ const onKeyDown = (e: KeyboardEvent) => {
   z-index: 20;
 }
 
-/* ★ 每屏幕独立蒙版
-   每块蒙版覆盖其对应的屏幕区域，使用 clip-path polygon(evenodd) 在选区位置镂空
-   坐标值都是相对于屏幕自身，不会出现跨屏大数值 */
-.screen-mask {
-  z-index: 50;
+/* 蒙版层 - 使用 clip-path 实现抠洞 */
+.mask-layer {
+  z-index: 40;
 }
 
 /* 选区指示器（边框 + 半透明填充） */
 .selection-indicator {
-  z-index: 100;
+  z-index: 50;
 }
 
 /* 大小标签 */
