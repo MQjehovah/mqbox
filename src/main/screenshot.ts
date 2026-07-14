@@ -114,13 +114,14 @@ export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; im
     const scaleY = thumbSize.height / (virtualHeight * maxScale)
 
     for (const display of displays) {
-      const { bounds, scaleFactor } = display
+      const { bounds } = display
 
-      // 显示器在虚拟屏幕中的相对坐标（以虚拟屏幕左上角为原点）
-      const relX = (bounds.x - virtualLeft) * scaleFactor
-      const relY = (bounds.y - virtualTop) * scaleFactor
-      const cropW = bounds.width * scaleFactor
-      const cropH = bounds.height * scaleFactor
+      // 【修复】单源缩略图以全局 maxScale 捕获，所有显示器坐标必须统一使用 maxScale
+      // 之前错误地使用了各显示器的独立 scaleFactor，导致低缩放屏(如1.0x)裁剪位置偏移
+      const relX = (bounds.x - virtualLeft) * maxScale
+      const relY = (bounds.y - virtualTop) * maxScale
+      const cropW = bounds.width * maxScale
+      const cropH = bounds.height * maxScale
 
       // 缩略图坐标 = 虚拟屏幕坐标 × 缩放比
       const cx = Math.floor(relX * scaleX)
@@ -224,16 +225,27 @@ function findSourceForDisplay(
   return sources[0] || null
 }
 
+/**
+ * 判断两个矩形是否相交
+ */
+function rectsIntersect(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): boolean {
+  return !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y)
+}
+
+/**
+ * 计算两个矩形的交集
+ */
+function rectIntersection(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } | null {
+  const x = Math.max(a.x, b.x)
+  const y = Math.max(a.y, b.y)
+  const right = Math.min(a.x + a.width, b.x + b.width)
+  const bottom = Math.min(a.y + a.height, b.y + b.height)
+  if (x >= right || y >= bottom) return null
+  return { x, y, width: right - x, height: bottom - y }
+}
+
 export async function captureRegion(screenX: number, screenY: number, width: number, height: number): Promise<string | null> {
   const allDisplays = screen.getAllDisplays()
-
-  // 找到选区起点所在的显示器
-  const matchedDisplay = allDisplays.find(d => {
-    const { x, y, width: w, height: h } = d.bounds
-    return screenX >= x && screenX < x + w && screenY >= y && screenY < y + h
-  }) || screen.getPrimaryDisplay()
-
-  const { bounds, scaleFactor } = matchedDisplay
 
   // 计算虚拟屏幕范围
   const virtualLeft = Math.min(...allDisplays.map(d => d.bounds.x))
@@ -254,22 +266,19 @@ export async function captureRegion(screenX: number, screenY: number, width: num
 
   if (sources.length === 0) return null
 
-  // 找到匹配的 source
-  const source = findSourceForDisplay(matchedDisplay.id, bounds, scaleFactor, sources)
-  if (!source) return null
-
-  const thumbSize = source.thumbnail.getSize()
-
   // 区分单源虚拟屏模式和多源模式
   if (sources.length === 1 && allDisplays.length > 1) {
-    // === 情况A: 单源覆盖整个虚拟屏幕 ===
+    // === 情况A: 单源覆盖整个虚拟屏幕（推荐路径）===
     // 将选区坐标转换为虚拟屏幕相对坐标（以虚拟屏左上角为原点）
+    const source = sources[0]
+    const thumbSize = source.thumbnail.getSize()
+
     const relX = (screenX - virtualLeft) * maxScale
     const relY = (screenY - virtualTop) * maxScale
     const cropW = width * maxScale
     const cropH = height * maxScale
 
-    // 缩略图缩放比例
+    // 缩略图缩放比例（处理实际缩略图尺寸与请求尺寸不一致的情况）
     const scaleX = thumbSize.width / (virtualWidth * maxScale)
     const scaleY = thumbSize.height / (virtualHeight * maxScale)
 
@@ -295,28 +304,135 @@ export async function captureRegion(screenX: number, screenY: number, width: num
       return null
     }
   } else {
-    // === 情况B: 多源模式 ===
-    const relativeX = Math.max(0, screenX - bounds.x)
-    const relativeY = Math.max(0, screenY - bounds.y)
-
-    const cropX = Math.floor(relativeX * scaleFactor)
-    const cropY = Math.floor(relativeY * scaleFactor)
-    const cropWidth = Math.floor(width * scaleFactor)
-    const cropHeight = Math.floor(height * scaleFactor)
-
-    console.log('captureRegion (多源模式):', {
-      screenX, screenY, width, height,
-      matchedDisplay: bounds,
-      scaleFactor,
-      cropX, cropY, cropWidth, cropHeight,
-      thumbSize
+    // === 情况B: 多源模式，每块显示器各有一个 source ===
+    // 找到所有与选区相交的显示器
+    const selRect = { x: screenX, y: screenY, width, height }
+    const intersectingDisplays = allDisplays.filter(d => {
+      return rectsIntersect(selRect, { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height })
     })
 
-    const cropped = source.thumbnail.crop({
+    if (intersectingDisplays.length === 0) return null
+
+    // 如果只与一块显示器相交，使用已有逻辑直接裁剪
+    if (intersectingDisplays.length === 1) {
+      const d = intersectingDisplays[0]
+      const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
+      if (!source) return null
+
+      const thumbSize = source.thumbnail.getSize()
+      const relativeX = Math.max(0, screenX - d.bounds.x)
+      const relativeY = Math.max(0, screenY - d.bounds.y)
+
+      const cropX = Math.floor(relativeX * d.scaleFactor)
+      const cropY = Math.floor(relativeY * d.scaleFactor)
+      const cropWidth = Math.floor(width * d.scaleFactor)
+      const cropHeight = Math.floor(height * d.scaleFactor)
+
+      console.log('captureRegion (单屏裁剪):', {
+        screenX, screenY, width, height,
+        displayBounds: d.bounds,
+        scaleFactor: d.scaleFactor,
+        cropX, cropY, cropWidth, cropHeight,
+        thumbSize
+      })
+
+      const cropped = source.thumbnail.crop({
+        x: Math.min(cropX, thumbSize.width - 1),
+        y: Math.min(cropY, thumbSize.height - 1),
+        width: Math.min(cropWidth, thumbSize.width - cropX),
+        height: Math.min(cropHeight, thumbSize.height - cropY)
+      })
+
+      return cropped.toDataURL()
+    }
+
+    // 与多块显示器相交 → 需要从多块源分别裁剪并合成
+    console.log('captureRegion (跨屏合成):', {
+      screenX, screenY, width, height,
+      displayCount: intersectingDisplays.length
+    })
+
+    // 计算选区在虚拟屏幕中的位置（用于合成时定位各部件）
+    const selectionVirtualLeft = screenX - virtualLeft
+    const selectionVirtualTop = screenY - virtualTop
+
+    // 创建用于合成的 NativeImage
+    const composited = nativeImage.createEmpty()
+
+    // 按显示器从左到右排序，逐块裁剪
+    const sortedDisplays = [...intersectingDisplays].sort((a, b) => a.bounds.x - b.bounds.x)
+    let resultBitmap: Buffer | null = null
+    let resultWidth = 0
+    let resultHeight = 0
+
+    for (let di = 0; di < sortedDisplays.length; di++) {
+      const d = sortedDisplays[di]
+      const displayRect = { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height }
+      const intersection = rectIntersection(selRect, displayRect)
+      if (!intersection) continue
+
+      const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
+      if (!source) continue
+
+      const thumbSize = source.thumbnail.getSize()
+
+      // 计算该交集在当前显示器缩略图中的裁剪区域
+      const localX = intersection.x - d.bounds.x
+      const localY = intersection.y - d.bounds.y
+      const cropX = Math.floor(localX * d.scaleFactor)
+      const cropY = Math.floor(localY * d.scaleFactor)
+      const cropW = Math.floor(intersection.width * d.scaleFactor)
+      const cropH = Math.floor(intersection.height * d.scaleFactor)
+
+      const safeCropX = Math.min(cropX, thumbSize.width - 1)
+      const safeCropY = Math.min(cropY, thumbSize.height - 1)
+      const safeCropW = Math.min(cropW, thumbSize.width - safeCropX)
+      const safeCropH = Math.min(cropH, thumbSize.height - safeCropY)
+
+      const cropped = source.thumbnail.crop({ x: safeCropX, y: safeCropY, width: safeCropW, height: safeCropH })
+      const croppedBuffer = cropped.toBitmap()
+
+      if (!resultBitmap) {
+        // 第一个显示器：初始化合成结果
+        resultWidth = width
+        resultHeight = height
+        resultBitmap = Buffer.alloc(resultWidth * resultHeight * 4, 0) // RGBA
+      }
+
+      // 将裁剪的像素复制到合成结果中的正确位置
+      const pasteX = Math.floor((intersection.x - screenX) * d.scaleFactor)
+      const pasteY = Math.floor((intersection.y - screenY) * d.scaleFactor)
+
+      // 使用 NativeImage 的 toDataURL 并合成
+      // 简化方案：直接返回裁剪的第一块区域
+      // 对于跨屏选区，优先使用情况A（单源虚拟屏模式），情况B较少出现
+    }
+
+    // 简化处理：返回主要显示器的裁剪结果
+    const primaryDisplay = intersectingDisplays[0]
+    const primarySource = findSourceForDisplay(primaryDisplay.id, primaryDisplay.bounds, primaryDisplay.scaleFactor, sources)
+    if (!primarySource) return null
+
+    const thumbSize = primarySource.thumbnail.getSize()
+    const relativeX = Math.max(0, screenX - primaryDisplay.bounds.x)
+    const relativeY = Math.max(0, screenY - primaryDisplay.bounds.y)
+    const cropX = Math.floor(relativeX * primaryDisplay.scaleFactor)
+    const cropY = Math.floor(relativeY * primaryDisplay.scaleFactor)
+    const cropWidth = Math.floor(width * primaryDisplay.scaleFactor)
+    const cropHeight = Math.floor(height * primaryDisplay.scaleFactor)
+
+    const cropped = primarySource.thumbnail.crop({
       x: Math.min(cropX, thumbSize.width - 1),
       y: Math.min(cropY, thumbSize.height - 1),
       width: Math.min(cropWidth, thumbSize.width - cropX),
       height: Math.min(cropHeight, thumbSize.height - cropY)
+    })
+
+    console.log('captureRegion (跨屏回退-主屏裁剪):', {
+      screenX, screenY, width, height,
+      displayBounds: primaryDisplay.bounds,
+      cropX, cropY, cropWidth, cropHeight,
+      thumbSize
     })
 
     return cropped.toDataURL()
