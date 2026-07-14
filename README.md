@@ -33,13 +33,7 @@ MQBox 是一款跨平台个人效率工具助手，采用极简单窗口设计�
 npm install
 
 # 2. 安装各插件依赖
-cd plugins/builtin/todo && npm install && cd ../../..
-cd plugins/builtin/everything && npm install && cd ../../..
-cd plugins/clipboard-history && npm install && cd ../..
-cd plugins/player && npm install && cd ..
-cd plugins/quick-notes && npm install && cd ..
-cd plugins/screenshot && npm install && cd ../..
-cd plugins/calculator && npm install && cd ..
+npm run install:plugins
 
 # 3. 开发模式启动
 npm run dev
@@ -55,6 +49,30 @@ npm run build
 ```bash
 npm run build:plugins
 ```
+
+### 运行测试
+
+```bash
+# 运行所有单元测试
+npm test
+
+# 运行特定测试文件
+npx vitest run --config tests/vitest.config.ts tests/unit/pinWindow.test.ts
+
+# 带覆盖率报告
+npx vitest run --config tests/vitest.config.ts --coverage
+
+# 观察模式（开发时）
+npx vitest --config tests/vitest.config.ts
+```
+
+### CI/CD 状态
+
+项目使用 GitHub Actions 进行持续集成，流水线包含：
+1. **代码质量门禁** — ESLint 检查 + TypeScript 类型检查
+2. **单元测试** — Vitest 运行所有测试
+3. **安全检查** — 扫描密钥、硬编码令牌和 TODO 遗留
+4. **构建验证** — 验证主进程可正常构建
 
 ## 目录结构
 

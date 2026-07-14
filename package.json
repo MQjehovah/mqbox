@@ -1,12 +1,15 @@
 {
   "name": "mqbox",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "个人效率工具助手",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "npm run build:plugins && vite",
+    "install:plugins": "cd plugins/builtin/todo && npm install && cd ../../.. && cd plugins/builtin/everything && npm install && cd ../../.. && cd plugins/clipboard-history && npm install && cd ../.. && cd plugins/player && npm install && cd ../.. && cd plugins/quick-notes && npm install && cd ../.. && cd plugins/screenshot && npm install && cd ../.. && cd plugins/calculator && npm install && cd ../..",
     "build:plugins": "cd plugins/builtin/todo && npm run build && cd ../../.. && cd plugins/builtin/everything && npm run build && cd ../../.. && cd plugins/clipboard-history && npm run build && cd ../.. && cd plugins/player && npm run build && cd ../.. && cd plugins/quick-notes && npm run build && cd ../.. && cd plugins/screenshot && npm run build && cd ../..",
     "build": "vue-tsc && vite build && npm run build:plugins && electron-builder",
+    "test": "vitest run --config tests/vitest.config.ts",
+    "test:watch": "vitest --config tests/vitest.config.ts",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit"
   },

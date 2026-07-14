@@ -55,73 +55,81 @@ export async function showEditor(dataUrl: string): Promise<void> {
 }
 
 /**
- * 生成钉图窗口的交互式 HTML/JS 注入代码
- * 包含: 图片显示 + 鼠标拖拽移动 + 关闭按钮
+ * 生成钉图窗口的完整 HTML 页面（含拖拽 + 关闭按钮）
+ * 通过 data:text/html 直接加载，无需 did-finish-load + executeJavaScript
  */
-function generatePinHtml(dataUrl: string, initialX: number, initialY: number): string {
+function generatePinHtml(dataUrl: string): string {
   const safeUrl = JSON.stringify(dataUrl)
 
-  // 构建页面 HTML 结构
-  const html =
-    '<div id="pin" style="width:100%;height:100%;position:relative;overflow:hidden;">' +
-    '<img id="pin-img" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;user-select:none;-webkit-user-select:none;">' +
-    '<button id="close-btn" style="position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,0.45);color:#fff;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;transition:background 0.15s;">✕</button>' +
-    '</div>'
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; cursor:default; }
+body { display:flex; align-items:center; justify-content:center; background:transparent; }
+#pin { position:relative; width:100%; height:100%; }
+#pin-img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; -webkit-user-select:none; }
+#close-btn {
+  position:absolute; top:6px; right:6px;
+  width:24px; height:24px; border-radius:50%;
+  border:none; background:rgba(0,0,0,0.45);
+  color:#fff; font-size:14px; line-height:24px; text-align:center;
+  cursor:pointer; z-index:1000; padding:0;
+  display:flex; align-items:center; justify-content:center;
+  transition:background 0.15s;
+}
+#close-btn:hover { background:rgba(255,0,0,0.7); }
+</style>
+</head>
+<body>
+<div id="pin">
+  <img id="pin-img" src=${safeUrl}>
+  <button id="close-btn">✕</button>
+</div>
+<script>
+(function() {
+  var closeBtn = document.getElementById('close-btn');
 
-  const safeHtml = JSON.stringify(html)
+  // 拖拽逻辑 - 用 window.screenX/Y 跟踪窗口绝对位置（标准 DOM 属性，contextIsolation 下可用）
+  var isDragging = false;
+  var startX = 0, startY = 0;
+  var winX = window.screenX || window.screenLeft || 0;
+  var winY = window.screenY || window.screenTop || 0;
 
-  return `
-    (function() {
-      document.body.innerHTML = ${safeHtml};
-      document.getElementById('pin-img').src = ${safeUrl};
-      document.body.style.margin = '0';
-      document.body.style.overflow = 'hidden';
-      document.body.style.cursor = 'default';
+  document.addEventListener('mousedown', function(e) {
+    if (e.target.id === 'close-btn') return;
+    isDragging = true;
+    startX = e.screenX;
+    startY = e.screenY;
+    e.preventDefault();
+  });
 
-      // 高亮关闭按钮 hover 效果
-      var closeBtn = document.getElementById('close-btn');
-      closeBtn.addEventListener('mouseenter', function() {
-        closeBtn.style.background = 'rgba(255,0,0,0.7)';
-      });
-      closeBtn.addEventListener('mouseleave', function() {
-        closeBtn.style.background = 'rgba(0,0,0,0.45)';
-      });
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    var dx = e.screenX - startX;
+    var dy = e.screenY - startY;
+    winX += dx;
+    winY += dy;
+    startX = e.screenX;
+    startY = e.screenY;
+    window.mqbox?.screenshot?.pinMove(winX, winY);
+  });
 
-      // === 拖拽逻辑 ===
-      var isDragging = false;
-      var startX = 0, startY = 0;
-      var winX = ${initialX}, winY = ${initialY};
+  document.addEventListener('mouseup', function() {
+    isDragging = false;
+  });
 
-      document.addEventListener('mousedown', function(e) {
-        if (e.target.id === 'close-btn') return;
-        isDragging = true;
-        startX = e.screenX;
-        startY = e.screenY;
-        e.preventDefault();
-      });
-
-      document.addEventListener('mousemove', function(e) {
-        if (!isDragging) return;
-        var dx = e.screenX - startX;
-        var dy = e.screenY - startY;
-        winX += dx;
-        winY += dy;
-        startX = e.screenX;
-        startY = e.screenY;
-        window.mqbox?.screenshot?.pinMove(winX, winY);
-      });
-
-      document.addEventListener('mouseup', function() {
-        isDragging = false;
-      });
-
-      // === 关闭按钮 ===
-      closeBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        window.mqbox?.screenshot?.pinClose();
-      });
-    })();
-  `
+  // 关闭按钮
+  closeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    window.mqbox?.screenshot?.pinClose();
+  });
+})();
+</script>
+</body>
+</html>`
 }
 
 export async function pinImage(dataUrl: string): Promise<void> {
@@ -171,18 +179,15 @@ export async function pinImage(dataUrl: string): Promise<void> {
     }
   })
 
-  // ★ 注入完整交互式 HTML（含拖拽 + 关闭按钮）
-  // ★ 必须等待 did-finish-load，确保 document.body 存在后再注入
-  const js = generatePinHtml(dataUrl, initialX, initialY)
-  win.webContents.once('did-finish-load', async () => {
-    try {
-      await win.webContents.executeJavaScript(js)
-      win.show()
-      win.focus()
-    } catch (e) {
-      console.error('pinImage: executeJavaScript failed:', e)
-      win.close()
-    }
+  // 方案：直接通过 data:text/html 加载完整 HTML 页面
+  // 替代旧的 "创建空窗口 → 等 did-finish-load → executeJavaScript 注入" 的两段式模式
+  const htmlContent = generatePinHtml(dataUrl)
+  const encoded = Buffer.from(htmlContent, 'utf-8').toString('base64')
+  win.loadURL(`data:text/html;base64,${encoded}`)
+
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
   })
 
   win.on('closed', () => {

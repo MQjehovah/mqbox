@@ -19,6 +19,7 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/main/screenshot.ts',
+        'src/main/pinWindow.ts',
         'src/main/plugin/**/*.ts',
         'src/renderer/src/components/ScreenshotPanel.vue',
         'src/shared/types.ts'

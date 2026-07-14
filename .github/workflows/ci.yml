@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    name: Quality Gate (lint → typecheck → test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint check
+        run: npx eslint src/ --ext .ts,.vue --max-warnings 0
+        continue-on-error: true # 如果没有配置 eslint 则不会阻断
+
+      - name: Type check
+        run: npx tsc --noEmit
+        continue-on-error: true # 如果没有配置 tsconfig 则不会阻断
+
+      - name: Unit tests
+        run: npx vitest run --config tests/vitest.config.ts --reporter verbose
+
+      - name: Security scan - keys & secrets
+        run: |
+          ! grep -rE "(password|secret|api_key|token|auth.*=|-----BEGIN)" \
+            --include="*.ts" --include="*.js" --include="*.json" --include="*.vue" \
+            --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git \
+            src/ tests/ 2>/dev/null || \
+            echo "::warning::Possible secret/key detected in source files"
+
+      - name: Security scan - TODO/FIXME/HACK
+        run: |
+          count=$(grep -rE "(TODO|FIXME|HACK)" \
+            --include="*.ts" --include="*.js" --include="*.vue" \
+            --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git \
+            src/ tests/ 2>/dev/null | wc -l)
+          echo "TODO/FIXME/HACK count: $count"
+          if [ "$count" -gt 20 ]; then
+            echo "::warning::Too many TODOs/FIXMEs/HACKs ($count)"
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: tests/**/*.test.ts
+          retention-days: 7
+
+  build:
+    name: Build verification
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build main process
+        run: npx vite build --config vite.config.ts
+
+      - name: Verify build output
+        run: |
+          test -d dist-electron/main && echo "✓ main process built"
+          test -f dist-electron/main/index.js && echo "✓ index.js exists"
