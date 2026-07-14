@@ -22,6 +22,7 @@ export interface MockThumbnail {
   toDataURL: () => string
   crop: (rect: { x: number; y: number; width: number; height: number }) => MockThumbnail
   toBitmap: () => Buffer
+  resize: (opts: { width: number; height: number }) => MockThumbnail
 }
 
 export interface MockSource {
@@ -115,6 +116,9 @@ export function createMockThumbnail(width: number, height: number, fillColor: st
     },
     toBitmap() {
       return buffer
+    },
+    resize(opts: { width: number; height: number }) {
+      return createMockThumbnail(Math.max(1, Math.floor(opts.width)), Math.max(1, Math.floor(opts.height)), fillColor)
     }
   }
 }
@@ -123,18 +127,15 @@ export function createMockThumbnail(width: number, height: number, fillColor: st
 
 export function createMockSource(
   display: MockDisplay,
-  virtualWidth: number,
-  virtualHeight: number,
-  maxScale: number
+  thumbWidth: number,
+  thumbHeight: number
 ): MockSource {
-  const thumbW = Math.floor(virtualWidth * maxScale)
-  const thumbH = Math.floor(virtualHeight * maxScale)
   return {
     name: `Screen ${display.id}`,
     id: `screen:${display.id}:0`,
     display_id: `${display.id}`,
     appIcon: null,
-    thumbnail: createMockThumbnail(thumbW, thumbH)
+    thumbnail: createMockThumbnail(thumbWidth, thumbHeight)
   }
 }
 
@@ -205,23 +206,15 @@ export const electronMock = {
       if (_mockSources.length > 0) {
         return _mockSources
       }
-      // Auto-generate a single virtual screen source covering all displays
-      const virtualLeft = Math.min(..._mockDisplays.map(d => d.bounds.x))
-      const virtualTop = Math.min(..._mockDisplays.map(d => d.bounds.y))
-      const virtualRight = Math.max(..._mockDisplays.map(d => d.bounds.x + d.bounds.width))
-      const virtualBottom = Math.max(..._mockDisplays.map(d => d.bounds.y + d.bounds.height))
-      const virtualWidth = virtualRight - virtualLeft
-      const virtualHeight = virtualBottom - virtualTop
-      const maxScale = Math.max(..._mockDisplays.map(d => d.scaleFactor))
-
+      // Auto-generate a single virtual screen source at the requested size
       return [{
         name: 'Entire Screen',
         id: 'screen:0:0',
         display_id: '0',
         appIcon: null,
         thumbnail: createMockThumbnail(
-          Math.floor(virtualWidth * maxScale),
-          Math.floor(virtualHeight * maxScale)
+          opts.thumbnailSize.width,
+          opts.thumbnailSize.height
         )
       }]
     }
@@ -298,6 +291,16 @@ export const electronMock = {
       toDataURL: () => 'data:image/png;base64,fromBitmap',
       getSize: () => ({ width: options.width || 1, height: options.height || 1 }),
       toBitmap: () => buffer
+    }),
+    createFromBuffer: (buffer: Buffer, options: any) => ({
+      toDataURL: () => 'data:image/png;base64,fromBuffer',
+      getSize: () => ({ width: options.width || 1, height: options.height || 1 }),
+      toBitmap: () => buffer,
+      resize: (opts: any) => ({
+        toDataURL: () => 'data:image/png;base64,resized',
+        getSize: () => ({ width: opts.width || 1, height: opts.height || 1 }),
+        toBitmap: () => buffer
+      })
     })
   }
 }

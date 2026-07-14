@@ -25,15 +25,80 @@ export async function getDisplays(): Promise<DisplayInfo[]> {
   }))
 }
 
+interface PhysicalRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+interface PhysicalLayout {
+  rects: Map<number, PhysicalRect>
+  totalWidth: number
+  totalHeight: number
+}
+
+/**
+ * 计算每个显示器在物理虚拟桌面位图中的位置和尺寸
+ *
+ * ★ 核心原理: Windows 单源虚拟桌面截图中，每块显示器的区域按各自 scaleFactor
+ *   映射到物理像素，而非全局 maxScale。因此裁剪坐标必须基于每块屏的独立物理偏移。
+ *
+ * 例: 左屏 1920x1080@1.0x + 右屏 1280x720@1.5x (物理 1920x1080)
+ *   物理虚拟桌面: [0,1920) + [1920,3840) = 3840px 宽
+ *   左屏物理偏移=0, 右屏物理偏移=1920
+ */
+export function computePhysicalLayout(displays: { id: number; bounds: { x: number; y: number; width: number; height: number }; scaleFactor: number }[]): PhysicalLayout {
+  const rects = new Map<number, PhysicalRect>()
+
+  for (const d of displays) {
+    rects.set(d.id, {
+      x: 0, y: 0,
+      width: Math.floor(d.bounds.width * d.scaleFactor),
+      height: Math.floor(d.bounds.height * d.scaleFactor)
+    })
+  }
+
+  const sortedByX = [...displays].sort((a, b) => a.bounds.x - b.bounds.x)
+  for (const d of sortedByX) {
+    let physX = 0
+    for (const other of displays) {
+      if (other.id === d.id) continue
+      if (other.bounds.x + other.bounds.width <= d.bounds.x) {
+        const r = rects.get(other.id)!
+        physX = Math.max(physX, r.x + r.width)
+      }
+    }
+    rects.get(d.id)!.x = physX
+  }
+
+  const sortedByY = [...displays].sort((a, b) => a.bounds.y - b.bounds.y)
+  for (const d of sortedByY) {
+    let physY = 0
+    for (const other of displays) {
+      if (other.id === d.id) continue
+      if (other.bounds.y + other.bounds.height <= d.bounds.y) {
+        const r = rects.get(other.id)!
+        physY = Math.max(physY, r.y + r.height)
+      }
+    }
+    rects.get(d.id)!.y = physY
+  }
+
+  let totalWidth = 0, totalHeight = 0
+  for (const r of rects.values()) {
+    totalWidth = Math.max(totalWidth, r.x + r.width)
+    totalHeight = Math.max(totalHeight, r.y + r.height)
+  }
+
+  return { rects, totalWidth: Math.max(totalWidth, 1), totalHeight: Math.max(totalHeight, 1) }
+}
+
 /**
  * 将 source 与 display 进行匹配
  * 策略栈: display_id 匹配 → 缩略图尺寸匹配 → 索引回退
- *
- * ★ 注意: 该函数不感知物理位置。同尺寸多屏时请调用方先对 displays 和 sources
- *   分别按位置排序再顺序匹配（见 captureAllScreens 情况B），
- *   这是最可靠的匹配方式。
  */
-function matchSourceToDisplay(
+export function matchSourceToDisplay(
   display: DisplayInfo,
   sources: Electron.DesktopCapturerSource[],
   usedSourceIndices: Set<number>,
@@ -76,28 +141,20 @@ function matchSourceToDisplay(
 
 export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; images: string[] }> {
   const displays = await getDisplays()
+  if (displays.length === 0) return { displays, images: [] }
 
-  // 计算虚拟屏幕的完整范围（所有显示器 bounding box）
-  const virtualLeft = Math.min(...displays.map(d => d.bounds.x))
-  const virtualTop = Math.min(...displays.map(d => d.bounds.y))
-  const virtualRight = Math.max(...displays.map(d => d.bounds.x + d.bounds.width))
-  const virtualBottom = Math.max(...displays.map(d => d.bounds.y + d.bounds.height))
-  const virtualWidth = virtualRight - virtualLeft
-  const virtualHeight = virtualBottom - virtualTop
-  const maxScale = Math.max(...displays.map(d => d.scaleFactor))
-
-  // 缩略图大小设为覆盖整个虚拟屏幕所需的尺寸
-  const thumbWidth = Math.floor(virtualWidth * maxScale)
-  const thumbHeight = Math.floor(virtualHeight * maxScale)
+  const layout = computePhysicalLayout(displays)
 
   console.log('=== captureAllScreens ===')
-  console.log('Virtual screen:', { virtualLeft, virtualTop, virtualWidth, virtualHeight, maxScale })
-  console.log('Thumbnail size:', { thumbWidth, thumbHeight })
-  console.log('Displays:', displays.map(d => ({ id: d.id, bounds: d.bounds, label: d.label, scaleFactor: d.scaleFactor })))
+  console.log('Physical layout:', { totalWidth: layout.totalWidth, totalHeight: layout.totalHeight })
+  console.log('Displays:', displays.map(d => ({
+    id: d.id, bounds: d.bounds, label: d.label, scaleFactor: d.scaleFactor,
+    physRect: layout.rects.get(d.id)
+  })))
 
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: { width: thumbWidth, height: thumbHeight }
+    thumbnailSize: { width: layout.totalWidth, height: layout.totalHeight }
   })
 
   console.log('Sources:', sources.map(s => ({
@@ -106,41 +163,31 @@ export async function captureAllScreens(): Promise<{ displays: DisplayInfo[]; im
   })))
 
   const images: string[] = []
+  if (sources.length === 0) return { displays, images }
 
-  // === 情况A: 单源覆盖整个虚拟屏幕（Windows 常见情况） ===
+  // === 情况A: 单源覆盖整个虚拟屏幕 ===
   if (sources.length === 1 && displays.length > 1) {
-    console.log('→ 情况A: 单源覆盖整个虚拟屏幕，按位置裁剪各显示器区域')
+    console.log('→ 情况A: 单源虚拟桌面，按物理布局裁剪')
     const source = sources[0]
     const thumbSize = source.thumbnail.getSize()
-
-    // 计算缩略图尺寸到虚拟屏幕物理坐标的缩放比例
-    const scaleX = thumbSize.width / (virtualWidth * maxScale)
-    const scaleY = thumbSize.height / (virtualHeight * maxScale)
+    const scaleX = thumbSize.width / layout.totalWidth
+    const scaleY = thumbSize.height / layout.totalHeight
 
     for (const display of displays) {
-      const { bounds } = display
+      const pr = layout.rects.get(display.id)!
+      const cx = Math.max(0, Math.floor(pr.x * scaleX))
+      const cy = Math.max(0, Math.floor(pr.y * scaleY))
+      const cw = Math.max(1, Math.min(Math.floor(pr.width * scaleX), thumbSize.width - cx))
+      const ch = Math.max(1, Math.min(Math.floor(pr.height * scaleY), thumbSize.height - cy))
 
-      // 【修复】单源缩略图以全局 maxScale 捕获，所有显示器坐标必须统一使用 maxScale
-      // 之前错误地使用了各显示器的独立 scaleFactor，导致低缩放屏(如1.0x)裁剪位置偏移
-      const relX = (bounds.x - virtualLeft) * maxScale
-      const relY = (bounds.y - virtualTop) * maxScale
-      const cropW = bounds.width * maxScale
-      const cropH = bounds.height * maxScale
-
-      // 缩略图坐标 = 虚拟屏幕坐标 × 缩放比
-      const cx = Math.floor(relX * scaleX)
-      const cy = Math.floor(relY * scaleY)
-      const cw = Math.floor(cropW * scaleX)
-      const ch = Math.floor(cropH * scaleY)
-
-      console.log(`  Crop ${display.label}: virtual=(${relX.toFixed(0)},${relY.toFixed(0)}) ${cropW.toFixed(0)}x${cropH.toFixed(0)} → thumb=(${cx},${cy}) ${cw}x${ch}`)
+      console.log(`  Crop ${display.label}: phys=(${pr.x},${pr.y}) ${pr.width}x${pr.height} → thumb=(${cx},${cy}) ${cw}x${ch}`)
 
       try {
         const cropped = source.thumbnail.crop({ x: cx, y: cy, width: cw, height: ch })
         images.push(cropped.toDataURL())
       } catch (e) {
         console.error(`  ✗ Crop failed for ${display.label}:`, e)
-        images.push(source.thumbnail.toDataURL())
+        images.push('')
       }
     }
   } else {
@@ -302,14 +349,14 @@ function findSourceForDisplay(
 /**
  * 判断两个矩形是否相交
  */
-function rectsIntersect(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): boolean {
+export function rectsIntersect(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): boolean {
   return !(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y)
 }
 
 /**
  * 计算两个矩形的交集
  */
-function rectIntersection(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } | null {
+export function rectIntersection(a: { x: number; y: number; width: number; height: number }, b: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } | null {
   const x = Math.max(a.x, b.x)
   const y = Math.max(a.y, b.y)
   const right = Math.min(a.x + a.width, b.x + b.width)
@@ -319,190 +366,150 @@ function rectIntersection(a: { x: number; y: number; width: number; height: numb
 }
 
 export async function captureRegion(screenX: number, screenY: number, width: number, height: number): Promise<string | null> {
-  const allDisplays = screen.getAllDisplays()
+  if (width <= 0 || height <= 0) return null
 
-  // 计算虚拟屏幕范围
-  const virtualLeft = Math.min(...allDisplays.map(d => d.bounds.x))
-  const virtualTop = Math.min(...allDisplays.map(d => d.bounds.y))
-  const virtualRight = Math.max(...allDisplays.map(d => d.bounds.x + d.bounds.width))
-  const virtualBottom = Math.max(...allDisplays.map(d => d.bounds.y + d.bounds.height))
-  const virtualWidth = virtualRight - virtualLeft
-  const virtualHeight = virtualBottom - virtualTop
+  const allDisplays = screen.getAllDisplays()
+  if (allDisplays.length === 0) return null
+
+  const layout = computePhysicalLayout(allDisplays)
   const maxScale = Math.max(...allDisplays.map(d => d.scaleFactor))
 
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: {
-      width: Math.floor(virtualWidth * maxScale),
-      height: Math.floor(virtualHeight * maxScale)
-    }
+    thumbnailSize: { width: layout.totalWidth, height: layout.totalHeight }
   })
 
   if (sources.length === 0) return null
 
-  // 区分单源虚拟屏模式和多源模式
+  // === 情况A: 单源覆盖整个虚拟屏幕 ===
   if (sources.length === 1 && allDisplays.length > 1) {
-    // === 情况A: 单源覆盖整个虚拟屏幕（推荐路径）===
-    // 将选区坐标转换为虚拟屏幕相对坐标（以虚拟屏左上角为原点）
     const source = sources[0]
     const thumbSize = source.thumbnail.getSize()
+    const scaleX = thumbSize.width / layout.totalWidth
+    const scaleY = thumbSize.height / layout.totalHeight
 
-    const relX = (screenX - virtualLeft) * maxScale
-    const relY = (screenY - virtualTop) * maxScale
-    const cropW = width * maxScale
-    const cropH = height * maxScale
+    // 找到选区左上角所在的显示器
+    const targetDisplay = allDisplays.find(d =>
+      screenX >= d.bounds.x && screenX < d.bounds.x + d.bounds.width &&
+      screenY >= d.bounds.y && screenY < d.bounds.y + d.bounds.height
+    )
+    if (!targetDisplay) return null
 
-    // 缩略图缩放比例（处理实际缩略图尺寸与请求尺寸不一致的情况）
-    const scaleX = thumbSize.width / (virtualWidth * maxScale)
-    const scaleY = thumbSize.height / (virtualHeight * maxScale)
+    const pr = layout.rects.get(targetDisplay.id)!
 
-    const cx = Math.floor(relX * scaleX)
-    const cy = Math.floor(relY * scaleY)
-    const cw = Math.floor(cropW * scaleX)
-    const ch = Math.floor(cropH * scaleY)
+    // 将选区逻辑坐标转换为物理坐标（使用该显示器的 scaleFactor）
+    const physSelX = pr.x + (screenX - targetDisplay.bounds.x) * targetDisplay.scaleFactor
+    const physSelY = pr.y + (screenY - targetDisplay.bounds.y) * targetDisplay.scaleFactor
+    const physSelW = width * targetDisplay.scaleFactor
+    const physSelH = height * targetDisplay.scaleFactor
 
-    console.log('captureRegion (虚拟屏模式):', {
+    // 缩放到缩略图坐标
+    const cx = Math.max(0, Math.floor(physSelX * scaleX))
+    const cy = Math.max(0, Math.floor(physSelY * scaleY))
+    const cw = Math.max(1, Math.min(Math.floor(physSelW * scaleX), thumbSize.width - cx))
+    const ch = Math.max(1, Math.min(Math.floor(physSelH * scaleY), thumbSize.height - cy))
+
+    console.log('captureRegion (单源):', {
       screenX, screenY, width, height,
-      virtualScreen: { left: virtualLeft, top: virtualTop, width: virtualWidth, height: virtualHeight },
-      thumbSize,
-      cropRegion: { x: cx, y: cy, width: cw, height: ch }
+      display: targetDisplay.id, scaleFactor: targetDisplay.scaleFactor,
+      physRect: pr, physSel: { x: physSelX, y: physSelY, w: physSelW, h: physSelH },
+      cropRegion: { x: cx, y: cy, width: cw, height: ch }, thumbSize
     })
 
-    if (cx >= 0 && cy >= 0 && cx + cw <= thumbSize.width && cy + ch <= thumbSize.height) {
-      const cropped = source.thumbnail.crop({ x: cx, y: cy, width: cw, height: ch })
-      const image = nativeImage.createFromDataURL(cropped.toDataURL())
-      clipboard.writeImage(image)
-      return cropped.toDataURL()
-    } else {
-      console.warn('captureRegion: crop region out of bounds', { cx, cy, cw, ch, thumbSize })
-      return null
-    }
-  } else {
-    // === 情况B: 多源模式，每块显示器各有一个 source ===
-    // 找到所有与选区相交的显示器
-    const selRect = { x: screenX, y: screenY, width, height }
-    const intersectingDisplays = allDisplays.filter(d => {
-      return rectsIntersect(selRect, { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height })
-    })
-
-    if (intersectingDisplays.length === 0) return null
-
-    // 如果只与一块显示器相交，使用已有逻辑直接裁剪
-    if (intersectingDisplays.length === 1) {
-      const d = intersectingDisplays[0]
-      const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
-      if (!source) return null
-
-      const thumbSize = source.thumbnail.getSize()
-      const relativeX = Math.max(0, screenX - d.bounds.x)
-      const relativeY = Math.max(0, screenY - d.bounds.y)
-
-      const cropX = Math.floor(relativeX * d.scaleFactor)
-      const cropY = Math.floor(relativeY * d.scaleFactor)
-      const cropWidth = Math.floor(width * d.scaleFactor)
-      const cropHeight = Math.floor(height * d.scaleFactor)
-
-      console.log('captureRegion (单屏裁剪):', {
-        screenX, screenY, width, height,
-        displayBounds: d.bounds,
-        scaleFactor: d.scaleFactor,
-        cropX, cropY, cropWidth, cropHeight,
-        thumbSize
-      })
-
-      const cropped = source.thumbnail.crop({
-        x: Math.min(cropX, thumbSize.width - 1),
-        y: Math.min(cropY, thumbSize.height - 1),
-        width: Math.min(cropWidth, thumbSize.width - cropX),
-        height: Math.min(cropHeight, thumbSize.height - cropY)
-      })
-
-      return cropped.toDataURL()
-    }
-
-    // 与多块显示器相交 → 需要从多块源分别裁剪并合成
-    console.log('captureRegion (跨屏合成):', {
-      screenX, screenY, width, height,
-      displayCount: intersectingDisplays.length,
-      maxScale
-    })
-
-    // 【修复】使用最大 scaleFactor 创建合成画布
-    // 各显示器裁剪块按其在虚拟屏中的位置拼合
-    const compositeW = Math.floor(width * maxScale)
-    const compositeH = Math.floor(height * maxScale)
-    const compositeBuffer = Buffer.alloc(compositeW * compositeH * 4, 0) // BGRA, init to transparent black
-
-    // 按显示器从左到右排序
-    const sortedDisplays = [...intersectingDisplays].sort((a, b) => a.bounds.x - b.bounds.x)
-
-    for (let di = 0; di < sortedDisplays.length; di++) {
-      const d = sortedDisplays[di]
-      const displayRect = { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height }
-      const intersection = rectIntersection(selRect, displayRect)
-      if (!intersection) continue
-
-      const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
-      if (!source) continue
-
-      const thumbSize = source.thumbnail.getSize()
-
-      // 计算该交集在当前显示器缩略图中的裁剪区域（使用该显示器的 scaleFactor）
-      const localX = intersection.x - d.bounds.x
-      const localY = intersection.y - d.bounds.y
-      const cropX = Math.floor(localX * d.scaleFactor)
-      const cropY = Math.floor(localY * d.scaleFactor)
-      const cropW = Math.floor(intersection.width * d.scaleFactor)
-      const cropH = Math.floor(intersection.height * d.scaleFactor)
-
-      const safeCropX = Math.min(Math.max(cropX, 0), thumbSize.width - 1)
-      const safeCropY = Math.min(Math.max(cropY, 0), thumbSize.height - 1)
-      const safeCropW = Math.min(cropW, thumbSize.width - safeCropX)
-      const safeCropH = Math.min(cropH, thumbSize.height - safeCropY)
-
-      if (safeCropW <= 0 || safeCropH <= 0) continue
-
-      let cropped = source.thumbnail.crop({ x: safeCropX, y: safeCropY, width: safeCropW, height: safeCropH })
-
-      // 如果 scaleFactor 不同，缩放到 maxScale
-      if (d.scaleFactor !== maxScale) {
-        const ratio = maxScale / d.scaleFactor
-        cropped = cropped.resize({
-          width: Math.floor(safeCropW * ratio),
-          height: Math.floor(safeCropH * ratio)
-        })
-      }
-
-      const croppedSize = cropped.getSize()
-      const croppedBuffer = cropped.toBitmap()
-
-      // 计算在合成画布中的粘贴位置（以 maxScale 为单位）
-      const pasteX = Math.floor((intersection.x - screenX) * maxScale)
-      const pasteY = Math.floor((intersection.y - screenY) * maxScale)
-
-      // 逐行复制像素到 compositeBuffer
-      for (let row = 0; row < croppedSize.height; row++) {
-        const srcRow = row * croppedSize.width * 4
-        const dstRow = (pasteY + row) * compositeW * 4 + pasteX * 4
-        if (dstRow + croppedSize.width * 4 <= compositeBuffer.length) {
-          croppedBuffer.copy(compositeBuffer, dstRow, srcRow, srcRow + croppedSize.width * 4)
-        }
-      }
-    }
-
-    // 从合成缓冲创建 NativeImage
-    const composited = nativeImage.createFromBuffer(compositeBuffer, {
-      width: compositeW,
-      height: compositeH
-    })
-
-    console.log('captureRegion (跨屏合成完成):', {
-      compositeW, compositeH,
-      displayCount: intersectingDisplays.length
-    })
-
-    return composited.toDataURL()
+    const cropped = source.thumbnail.crop({ x: cx, y: cy, width: cw, height: ch })
+    const image = nativeImage.createFromDataURL(cropped.toDataURL())
+    clipboard.writeImage(image)
+    return cropped.toDataURL()
   }
+
+  // === 情况B: 多源模式 ===
+  const selRect = { x: screenX, y: screenY, width, height }
+  const intersectingDisplays = allDisplays.filter(d =>
+    rectsIntersect(selRect, { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height })
+  )
+
+  if (intersectingDisplays.length === 0) return null
+
+  // 单屏选区
+  if (intersectingDisplays.length === 1) {
+    const d = intersectingDisplays[0]
+    const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
+    if (!source) return null
+
+    const thumbSize = source.thumbnail.getSize()
+    const relativeX = Math.max(0, screenX - d.bounds.x)
+    const relativeY = Math.max(0, screenY - d.bounds.y)
+    const cropX = Math.floor(relativeX * d.scaleFactor)
+    const cropY = Math.floor(relativeY * d.scaleFactor)
+    const cropWidth = Math.floor(width * d.scaleFactor)
+    const cropHeight = Math.floor(height * d.scaleFactor)
+
+    const cropped = source.thumbnail.crop({
+      x: Math.min(cropX, thumbSize.width - 1),
+      y: Math.min(cropY, thumbSize.height - 1),
+      width: Math.max(1, Math.min(cropWidth, thumbSize.width - cropX)),
+      height: Math.max(1, Math.min(cropHeight, thumbSize.height - cropY))
+    })
+    const dataUrl = cropped.toDataURL()
+    clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
+    return dataUrl
+  }
+
+  // 跨屏选区 → 合成
+  console.log('captureRegion (跨屏合成):', { screenX, screenY, width, height, displayCount: intersectingDisplays.length })
+
+  const compositeW = Math.floor(width * maxScale)
+  const compositeH = Math.floor(height * maxScale)
+  const compositeBuffer = Buffer.alloc(compositeW * compositeH * 4, 0)
+
+  const sortedDisplays = [...intersectingDisplays].sort((a, b) => a.bounds.x - b.bounds.x)
+
+  for (const d of sortedDisplays) {
+    const intersection = rectIntersection(selRect, d.bounds)
+    if (!intersection) continue
+
+    const source = findSourceForDisplay(d.id, d.bounds, d.scaleFactor, sources)
+    if (!source) continue
+
+    const thumbSize = source.thumbnail.getSize()
+    const localX = intersection.x - d.bounds.x
+    const localY = intersection.y - d.bounds.y
+    const cropX = Math.floor(localX * d.scaleFactor)
+    const cropY = Math.floor(localY * d.scaleFactor)
+    const cropW = Math.floor(intersection.width * d.scaleFactor)
+    const cropH = Math.floor(intersection.height * d.scaleFactor)
+
+    const safeCropX = Math.min(Math.max(cropX, 0), thumbSize.width - 1)
+    const safeCropY = Math.min(Math.max(cropY, 0), thumbSize.height - 1)
+    const safeCropW = Math.min(cropW, thumbSize.width - safeCropX)
+    const safeCropH = Math.min(cropH, thumbSize.height - safeCropY)
+    if (safeCropW <= 0 || safeCropH <= 0) continue
+
+    let cropped = source.thumbnail.crop({ x: safeCropX, y: safeCropY, width: safeCropW, height: safeCropH })
+
+    if (d.scaleFactor !== maxScale) {
+      const ratio = maxScale / d.scaleFactor
+      cropped = cropped.resize({ width: Math.floor(safeCropW * ratio), height: Math.floor(safeCropH * ratio) })
+    }
+
+    const croppedSize = cropped.getSize()
+    const croppedBuffer = cropped.toBitmap()
+    const pasteX = Math.floor((intersection.x - screenX) * maxScale)
+    const pasteY = Math.floor((intersection.y - screenY) * maxScale)
+
+    for (let row = 0; row < croppedSize.height; row++) {
+      const srcRow = row * croppedSize.width * 4
+      const dstRow = (pasteY + row) * compositeW * 4 + pasteX * 4
+      if (dstRow + croppedSize.width * 4 <= compositeBuffer.length) {
+        croppedBuffer.copy(compositeBuffer, dstRow, srcRow, srcRow + croppedSize.width * 4)
+      }
+    }
+  }
+
+  const composited = nativeImage.createFromBuffer(compositeBuffer, { width: compositeW, height: compositeH })
+  const compositeUrl = composited.toDataURL()
+  clipboard.writeImage(nativeImage.createFromDataURL(compositeUrl))
+  return compositeUrl
 }
 
 export async function startScreenshot(): Promise<void> {
