@@ -7,6 +7,23 @@ import { getPluginEditor } from './plugin/host'
 let editorWindow: BrowserWindow | null = null
 const pinWindows: Map<string, BrowserWindow> = new Map()
 
+/**
+ * ★ 存储每个钉图窗口的原始尺寸（创建时固定），
+ *    拖拽过程中永不使用 getSize() 读取，
+ *    防止 DWM 合成事件导致 getSize() 返回被篡改的尺寸形成正反馈。
+ */
+const pinOriginalSizeMap = new WeakMap<BrowserWindow, { width: number; height: number }>()
+
+/** 获取钉图窗口的原始尺寸（创建时固定的值） */
+export function getPinOriginalSize(win: BrowserWindow): { width: number; height: number } | undefined {
+  return pinOriginalSizeMap.get(win)
+}
+
+/** 清理钉图窗口的原始尺寸记录 */
+function clearPinOriginalSize(win: BrowserWindow): void {
+  pinOriginalSizeMap.delete(win)
+}
+
 export async function showEditor(dataUrl: string): Promise<void> {
   if (editorWindow) {
     editorWindow.show()
@@ -55,81 +72,39 @@ export async function showEditor(dataUrl: string): Promise<void> {
 }
 
 /**
- * 生成钉图窗口的完整 HTML 页面（含拖拽 + 关闭按钮）
- * 通过 data:text/html 直接加载，无需 did-finish-load + executeJavaScript
+ * 生成钉图窗口的最小化 HTML 骨架（不含图片数据，避免大图 data:URL 触发布局正反馈）
+ * 搭配 buildPinInjectScript() 通过 executeJavaScript 注入图片 src。
+ *
+ * 拖拽采用 -webkit-app-region:drag 原生 OS 窗口拖拽，而非手动 mousemove→setBounds，
+ * 彻底避免 Windows DWM 在透明窗口上 setBounds 导致的尺寸篡改 bug（Electron #48247）。
  */
-function generatePinHtml(dataUrl: string): string {
-  const safeUrl = JSON.stringify(dataUrl)
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-html,body { width:100%; height:100%; overflow:hidden; cursor:default; }
-body { display:flex; align-items:center; justify-content:center; background:transparent; }
-#pin { position:relative; width:100%; height:100%; }
-#pin-img { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; user-select:none; -webkit-user-select:none; }
-#close-btn {
-  position:absolute; top:6px; right:6px;
-  width:24px; height:24px; border-radius:50%;
-  border:none; background:rgba(0,0,0,0.45);
-  color:#fff; font-size:14px; line-height:24px; text-align:center;
-  cursor:pointer; z-index:1000; padding:0;
-  display:flex; align-items:center; justify-content:center;
-  transition:background 0.15s;
+function buildPinSkeletonHtml(): string {
+  return '<!DOCTYPE html><html><head><style>' +
+    '*{margin:0;padding:0;box-sizing:border-box}' +
+    'html,body{width:100%;height:100%;overflow:hidden;cursor:default}' +
+    'body{background:transparent}' +
+    '#pin{position:relative;width:100%;height:100%;overflow:hidden;-webkit-app-region:drag}' +
+    '#pin-img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;user-select:none;-webkit-user-select:none}' +
+    '#close-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;transition:background .15s;-webkit-app-region:no-drag}' +
+    '#close-btn:hover{background:rgba(255,0,0,.7)}' +
+    '</style></head><body>' +
+    '<div id="pin"><img id="pin-img"><button id="close-btn">\u2715</button></div>' +
+    '</body></html>'
 }
-#close-btn:hover { background:rgba(255,0,0,0.7); }
-</style>
-</head>
-<body>
-<div id="pin">
-  <img id="pin-img" src=${safeUrl}>
-  <button id="close-btn">✕</button>
-</div>
-<script>
-(function() {
-  var closeBtn = document.getElementById('close-btn');
 
-  // 拖拽逻辑 - 用 window.screenX/Y 跟踪窗口绝对位置（标准 DOM 属性，contextIsolation 下可用）
-  var isDragging = false;
-  var startX = 0, startY = 0;
-  var winX = window.screenX || window.screenLeft || 0;
-  var winY = window.screenY || window.screenTop || 0;
-
-  document.addEventListener('mousedown', function(e) {
-    if (e.target.id === 'close-btn') return;
-    isDragging = true;
-    startX = e.screenX;
-    startY = e.screenY;
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', function(e) {
-    if (!isDragging) return;
-    var dx = e.screenX - startX;
-    var dy = e.screenY - startY;
-    winX += dx;
-    winY += dy;
-    startX = e.screenX;
-    startY = e.screenY;
-    window.mqbox?.screenshot?.pinMove(winX, winY);
-  });
-
-  document.addEventListener('mouseup', function() {
-    isDragging = false;
-  });
-
-  // 关闭按钮
-  closeBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    window.mqbox?.screenshot?.pinClose();
-  });
-})();
-</script>
-</body>
-</html>`
+/**
+ * 生成钉图窗口的注入脚本（通过 executeJavaScript 注入）
+ * 只设置 img.src 和关闭按钮事件，不重建 DOM。
+ *
+ * 拖拽由 OS 原生处理（-webkit-app-region:drag），无需任何手动 mousemove→setBounds
+ * 逻辑，彻底消除 Windows DWM 自动修改窗口尺寸的 bug。
+ */
+function buildPinInjectScript(safeUrl: string): string {
+  return '(function(){' +
+    'var c=document.getElementById("close-btn");' +
+    'document.getElementById("pin-img").src=' + safeUrl + ';' +
+    'c.addEventListener("click",function(e){e.stopPropagation();var a=window.mqbox;if(a&&a.screenshot&&a.screenshot.pinClose)a.screenshot.pinClose()});' +
+    '})()'
 }
 
 export async function pinImage(dataUrl: string): Promise<void> {
@@ -179,19 +154,69 @@ export async function pinImage(dataUrl: string): Promise<void> {
     }
   })
 
-  // 方案：直接通过 data:text/html 加载完整 HTML 页面
-  // 替代旧的 "创建空窗口 → 等 did-finish-load → executeJavaScript 注入" 的两段式模式
-  const htmlContent = generatePinHtml(dataUrl)
-  const encoded = Buffer.from(htmlContent, 'utf-8').toString('base64')
-  win.loadURL(`data:text/html;base64,${encoded}`)
+  // ★ 存储原始尺寸，以备二次校验使用
+  pinOriginalSizeMap.set(win, { width, height })
 
-  win.once('ready-to-show', () => {
-    win.show()
-    win.focus()
+  // 强制锁定窗口尺寸（Windows 透明窗口上 resizable:false 可能被忽略）
+  win.setMinimumSize(width, height)
+  win.setMaximumSize(width, height)
+
+  // ===== ★ 防 DWM 拖拽尺寸篡改 =====
+  // 问题: Windows DWM 在拖拽透明无框窗口时会在 OS 层面修改窗口尺寸
+  // （横移变宽、纵移变高），setMinimumSize/setMaximumSize/resizable:false 均无法阻止。
+  //
+  // 修复:
+  // 1. resize 事件监听 — DWM 改尺寸会触发 resize 事件，立即纠正
+  // 2. 定时轮询 — 作为安全兜底（DWM 可能不触发 resize 事件）
+
+  // ★ 监听 resize 事件，DWM 篡改后立即纠正回原始尺寸
+  win.on('resize', function onPinResize() {
+    if (win.isDestroyed()) return
+    const [curW, curH] = win.getSize()
+    if (curW !== width || curH !== height) {
+      win.setBounds({ x: win.x, y: win.y, width, height })
+    }
+  })
+
+  // ★ 定时轮询作为安全兜底（DWM 可能在 resize 事件后再次篡改）
+  const correctionTimer = setInterval(() => {
+    if (win.isDestroyed()) { clearInterval(correctionTimer); return }
+    const [curW, curH] = win.getSize()
+    if (curW !== width || curH !== height) {
+      win.setBounds({ width, height })
+    }
+  }, 100)
+
+  // 步骤 1: 加载最小化 HTML 骨架（不含图片数据，只有 DOM 结构 + CSS）
+  // 使用 tiny data:text/html 而非 about:blank，避免 about:blank 下 did-finish-load 可靠性问题
+  const skeletonHtml = buildPinSkeletonHtml()
+  win.loadURL('data:text/html,' + encodeURIComponent(skeletonHtml))
+
+  // 步骤 2: did-finish-load 后注入图片 src 和关闭按钮事件
+  // 拖拽由 OS 原生 -webkit-app-region:drag 处理，无需手动拖拽逻辑
+  win.webContents.once('did-finish-load', async () => {
+    try {
+      const safeUrl = JSON.stringify(dataUrl)
+      const injectScript = buildPinInjectScript(safeUrl)
+      await win.webContents.executeJavaScript(injectScript)
+      if (!win.isDestroyed()) {
+        win.setSize(width, height)
+        win.show()
+        win.focus()
+      }
+    } catch (e) {
+      console.error('pinImage: executeJavaScript error:', e)
+      if (!win.isDestroyed()) {
+        win.show()
+        win.focus()
+      }
+    }
   })
 
   win.on('closed', () => {
+    clearInterval(correctionTimer)
     pinWindows.delete(id)
+    clearPinOriginalSize(win)
   })
 
   pinWindows.set(id, win)

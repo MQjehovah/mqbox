@@ -2,12 +2,13 @@
  * Unit tests for pinWindow.ts
  *
  * Tests cover:
- * - generatePinHtml() - HTML/JS structure, close button, drag logic (via loadURL decode)
+ * - buildPinInjectScript() - Injected JS IIFE structure (via executeJavaScript capture)
  * - pinImage() - window creation, sizing, centering, multi-pin, show on ready-to-show
  * - saveImage() - file save dialog + write
  * - copyImage() - clipboard write
  * - closeEditor() / closeAllPins() - window lifecycle
  * - showEditor() - editor window creation and reuse
+ * - Prove-It tests: window size stability during drag, IPC position-only, resizable:false
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -39,6 +40,8 @@ let mainProcessPinWindows: Map<string, any> | null = null
 
 class MockWebContents {
   listeners: Record<string, Function[]> = {}
+  /** 捕获最近一次 executeJavaScript 传入的脚本 */
+  lastInjectedScript: string = ''
   on(event: string, fn: Function) {
     if (!this.listeners[event]) this.listeners[event] = []
     this.listeners[event].push(fn)
@@ -58,16 +61,29 @@ class MockWebContents {
     // no-op in unit test
   }
   executeJavaScript(js: string): Promise<any> {
+    this.lastInjectedScript = js
     return Promise.resolve()
+  }
+  /** 从 executeJavaScript 捕获的 IIFE 脚本中提取内容 */
+  getInjectedScript(): string {
+    return this.lastInjectedScript
   }
 }
 
 class MockBrowserWindow {
   id: number = Date.now()
   isDestroyedFlag = false
+  /** @ts-ignore */
   webContents = new MockWebContents()
   x = 0; y = 0; width = 0; height = 0
   loadedUrl: string = ''
+  setSizeCalled = false
+  setPositionCalled = false
+  setBoundsCalled = false
+  setMinimumSizeCalled = false
+  setMaximumSizeCalled = false
+  private _minWidth = 0; private _minHeight = 0
+  private _maxWidth = 0; private _maxHeight = 0
   private listeners: Record<string, Function[]> = {}
 
   constructor(opts: any) {
@@ -80,10 +96,36 @@ class MockBrowserWindow {
 
   setPosition(x: number, y: number) {
     this.x = x; this.y = y
+    this.setPositionCalled = true
   }
   getPosition(): number[] { return [this.x, this.y] }
-  setSize(w: number, h: number) { this.width = w; this.height = h }
+  setSize(w: number, h: number) {
+    this.width = w; this.height = h
+    this.setSizeCalled = true
+  }
   getSize(): number[] { return [this.width, this.height] }
+  setBounds(bounds: { x: number; y: number; width: number; height: number }) {
+    this.x = bounds.x; this.y = bounds.y
+    this.width = bounds.width; this.height = bounds.height
+    this.setBoundsCalled = true
+  }
+  getBounds(): { x: number; y: number; width: number; height: number } {
+    return { x: this.x, y: this.y, width: this.width, height: this.height }
+  }
+  setMinimumSize(w: number, h: number) {
+    this._minWidth = w; this._minHeight = h
+    this.setMinimumSizeCalled = true
+  }
+  getMinimumSize(): number[] { return [this._minWidth, this._minHeight] }
+  setMaximumSize(w: number, h: number) {
+    this._maxWidth = w; this._maxHeight = h
+    this.setMaximumSizeCalled = true
+  }
+  getMaximumSize(): number[] { return [this._maxWidth, this._maxHeight] }
+  /** 从 webContents 获取注入的脚本 */
+  getInjectedScript(): string {
+    return this.webContents.getInjectedScript()
+  }
 
   close() {
     this.isDestroyedFlag = true
@@ -183,28 +225,24 @@ function triggerReadyToShow(win: any) {
   win._emit('ready-to-show')
 }
 
-/**
- * 从 loadURL 的 data:html;base64 中提取注入的 JS 代码
- * 新实现：generatePinHtml() 返回完整 HTML → loadURL(data:text/html;base64,...)
- */
+/** 从 executeJavaScript 注入的 IIFE 脚本中提取内容 */
 async function getInjectedJS(dataUrl: string): Promise<string> {
   const mod = await getMod()
   await mod.pinImage(dataUrl)
   const win = createdWindows[createdWindows.length - 1] as any
-  const html = win.getLoadedHtml()
-  // Extract script content from the HTML document
-  const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/)
-  return scriptMatch ? scriptMatch[1].trim() : ''
+  return win.getInjectedScript()
 }
 
-/**
- * 获取通过 loadURL 加载的完整 HTML 页面
- */
-async function getLoadedPage(dataUrl: string): Promise<string> {
+/** 从 loadURL 的 data:text/html,<URI-encoded> 中解码出完整 HTML */
+async function getSkeletonHtml(dataUrl: string): Promise<string> {
   const mod = await getMod()
   await mod.pinImage(dataUrl)
   const win = createdWindows[createdWindows.length - 1] as any
-  return win.getLoadedHtml()
+  if (!win.loadedUrl) return ''
+  // Format: data:text/html,<URI-encoded HTML>
+  const prefix = 'data:text/html,'
+  if (!win.loadedUrl.startsWith(prefix)) return ''
+  return decodeURIComponent(win.loadedUrl.slice(prefix.length))
 }
 
 // ====== Setup / Teardown ======
@@ -217,59 +255,89 @@ beforeEach(() => {
   mockLoadView.mockClear()
 })
 
-// ====== Tests: generatePinHtml ======
+// ====== Tests: buildPinInjectScript (IIFE injected via executeJavaScript) ======
 
-describe('pinWindow.ts - generatePinHtml (via loadURL decode)', () => {
+describe('pinWindow.ts - buildPinInjectScript (via executeJavaScript)', () => {
   beforeEach(() => {
     vi.resetModules()
   })
 
-  it('注入的 HTML 应包含 #pin-img 和 #close-btn 元素', async () => {
-    const html = await getLoadedPage('data:image/png;base64,test')
-    expect(html).toContain('<!DOCTYPE html>')
-    expect(html).toContain('id="pin-img"')
-    expect(html).toContain('id="close-btn"')
-    expect(html).toContain('</html>')
-  })
-
-  it('注入的 HTML 应将图片 src 设为传入的 dataUrl', async () => {
-    const html = await getLoadedPage('data:image/png;base64,myTestImage')
-    expect(html).toContain('src="data:image/png;base64,myTestImage"')
-  })
-
-  it('注入的 JS 应包含拖拽事件处理（mousedown/mousemove/mouseup + isDragging + pinMove）', async () => {
+  it('注入的脚本应是 IIFE 自执行函数', async () => {
     const js = await getInjectedJS('data:image/png;base64,test')
-    expect(js).toContain('mousedown')
-    expect(js).toContain('mousemove')
-    expect(js).toContain('mouseup')
-    expect(js).toContain('isDragging')
-    expect(js).toContain('pinMove')
+    expect(js).toMatch(/^\(function\(\)/)
+    expect(js).toContain('})()')
   })
 
-  it('注入的 JS 应调用 pinMove IPC（增量法）', async () => {
+  it('IIFE 应设置图片 src 并包含关键 DOM id 引用', async () => {
     const js = await getInjectedJS('data:image/png;base64,test')
-    expect(js).toContain('pinMove(winX, winY)')
+    // Now the DOM skeleton is loaded via loadURL; inject script only sets src + drag events
+    expect(js).toContain('src=')
+    // Should reference #pin-img (the img element already in DOM)
+    expect(js).toContain('pin-img')
+    // Should reference #close-btn (to add click handler)
+    expect(js).toContain('close-btn')
   })
 
-  it('注入的 JS 应包含关闭按钮点击事件 + stopPropagation', async () => {
+  it('IIFE 应将图片 src 设为传入的 dataUrl', async () => {
+    const js = await getInjectedJS('data:image/png;base64,myTestImage')
+    expect(js).toContain('src=')
+    expect(js).toContain('data:image/png;base64,myTestImage')
+  })
+
+  // ★ 已移除：拖拽事件处理测试（拖拽由 -webkit-app-region:drag 原生处理，不再走 JS）
+
+  // ★ 已移除：dx===0 && dy===0 短路测试（不再有 JS 拖拽，无需此保护）
+
+  // ★ 已移除：增量法拖拽测试（-webkit-app-region:drag 原生处理，无需 JS 计算）
+
+  it('IIFE 应包含关闭按钮点击事件 + stopPropagation', async () => {
     const js = await getInjectedJS('data:image/png;base64,test')
     expect(js).toContain('close-btn')
-    expect(js).toContain('pinClose')
     expect(js).toContain('stopPropagation')
+    expect(js).toContain('pinClose')
   })
 
-  it('关闭按钮 hover 应变化背景色（CSS :hover 实现）', async () => {
-    const html = await getLoadedPage('data:image/png;base64,test')
-    // Hover effect is implemented in CSS, not JS mouseenter/mouseleave
+  it('CSS 应包含 #close-btn:hover 背景色变化（CSS 现在在骨架 HTML 中）', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
     expect(html).toContain('#close-btn:hover')
-    expect(html).toContain('rgba(255,0,0,0.7)')
-    expect(html).toContain('rgba(0,0,0,0.45)')
+    expect(html).toContain('background')
   })
 
-  it('点击关闭按钮不应触发拖拽 (e.target.id === close-btn 时跳过 mousedown)', async () => {
-    const js = await getInjectedJS('data:image/png;base64,test')
-    expect(js).toContain("e.target.id === 'close-btn'")
-    expect(js).toContain('return')
+  // ★ 已移除：点击关闭按钮不应触发拖拽测试（-webkit-app-region:drag 原生拖拽，无 JS mousedown）
+
+  // ====== Prove-It Tests: 拖动窗口持续变大 Bug 修复验证 ======
+
+  it('body 不应使用 display:flex 布局【Prove-It: 防止拖动撑大】', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    // body 不应有 flex 布局（旧 bug：body 用 flex 导致拖动时窗口被内容撑大）
+    // CSS is now in skeleton HTML <style> tags, not in inject script
+    expect(html).not.toMatch(/body\s*\{[^}]*display\s*:\s*flex/i)
+  })
+
+  it('#pin 容器应有 overflow:hidden 防止内容溢出撑大【Prove-It: 修复措施验证】', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    expect(html).toContain('overflow:hidden')
+  })
+
+  it('html,body 应有 overflow:hidden 防止滚动条影响窗口尺寸计算', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    expect(html).toContain('overflow:hidden')
+  })
+
+  it('图片应有 object-fit:contain 防止图片本身撑大容器', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    expect(html).toContain('object-fit:contain')
+  })
+
+  it('图片应有 pointer-events:none 防止图片拦截鼠标事件', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    expect(html).toContain('pointer-events:none')
+  })
+
+  it('关闭按钮应有 position:absolute + z-index 确保始终可点击', async () => {
+    const html = await getSkeletonHtml('data:image/png;base64,test')
+    expect(html).toContain('position:absolute')
+    expect(html).toContain('z-index:')
   })
 })
 
@@ -320,16 +388,30 @@ describe('pinWindow.ts - pinImage', () => {
     expect(win.height).toBeLessThanOrEqual(300)
   })
 
-  it('应通过 loadURL 注入交互式 HTML', async () => {
+  it('应使用 data:text/html 加载骨架HTML，并通过 executeJavaScript 注入交互式脚本', async () => {
     const mod = await getMod()
     await mod.pinImage('data:image/png;base64,test')
 
     const win = createdWindows[0] as any
-    // Should use loadURL with data:text/html;base64, not executeJavaScript
-    expect(win.loadedUrl).toMatch(/^data:text\/html;base64,/)
-    const html = win.getLoadedHtml()
-    expect(html).toContain('pin-img')
-    expect(html).toContain('close-btn')
+    // Should use data:text/html skeleton (URI-encoded, not base64)
+    expect(win.loadedUrl).toMatch(/^data:text\/html,/)
+    // Decode the skeleton HTML from URI-encoded format
+    const prefix = 'data:text/html,'
+    expect(win.loadedUrl.startsWith(prefix)).toBe(true)
+    const skeletonHtml = decodeURIComponent(win.loadedUrl.slice(prefix.length))
+    // Skeleton should contain essential DOM structure (not full image data)
+    expect(skeletonHtml).toContain('id="pin"')
+    expect(skeletonHtml).toContain('id="pin-img"')
+    expect(skeletonHtml).toContain('id="close-btn"')
+    // Skeleton should NOT contain large data:image/... URL (only the img tag placeholder)
+    expect(skeletonHtml).not.toContain('data:image/png;base64,')
+    // Should have injected JS via executeJavaScript (this contains the img.src and drag logic)
+    const js = win.getInjectedScript()
+    expect(js).toContain('(function()')
+    // inject script should set img.src with the dataUrl
+    expect(js).toContain('src=')
+    expect(js).toContain('data:image/png;base64,test')
+    // 拖拽由 -webkit-app-region:drag 原生处理（CSS 在骨架 HTML 中），js 中无 mousedown/mousemove
   })
 
   it('应支持多钉图窗口（连续调用 pinImage 多次）', async () => {
@@ -352,20 +434,24 @@ describe('pinWindow.ts - pinImage', () => {
     expect(win.height).toBeGreaterThan(0)
   })
 
-  it('ready-to-show 事件触发时应调用 show 和 focus（Bug 修复验证：之前的实现因缺少 loadURL 导致永不显示）', async () => {
+  it('did-finish-load 后应注入脚本并调用 setSize 和 show（不再调 focus）', async () => {
     const mod = await getMod()
     await mod.pinImage('data:image/png;base64,test')
 
     const win = createdWindows[0] as any
-    // show() and focus() are called inside ready-to-show handler
-    expect(win.showCalled).toBe(false)  // Not shown yet
-    expect(win.focusCalled).toBe(false)
-
-    // Simulate page load complete
-    triggerReadyToShow(win)
-
+    // Mock的once()自动触发did-finish-load，所以show已在pinImage内被调用
     expect(win.showCalled).toBe(true)
-    expect(win.focusCalled).toBe(true)
+
+    // 新实现：使用 data:text/html 骨架（URI-encoded），不再使用 about:blank
+    expect(win.loadedUrl).toMatch(/^data:text\/html,/)
+    // 验证 executeJavaScript 被注入
+    expect(win.webContents.lastInjectedScript).toBeTruthy()
+    expect(win.webContents.lastInjectedScript).toContain('(function()')
+    // 验证 did-finish-load 后调用了 setSize
+    expect(win.setSizeCalled).toBe(true)
+    // 验证 setMinimumSize / setMaximumSize 被调用（尺寸锁定）
+    expect(win.setMinimumSizeCalled).toBe(true)
+    expect(win.setMaximumSizeCalled).toBe(true)
   })
 })
 

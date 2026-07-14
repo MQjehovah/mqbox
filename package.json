@@ -24,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@vitejs/plugin-vue": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
     "electron": "^28.3.3",
     "electron-builder": "^24.0.0",

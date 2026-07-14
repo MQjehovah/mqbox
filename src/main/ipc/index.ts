@@ -323,16 +323,8 @@ ipcMain.on('screenshot:cancel', () => {
     }
   })
 
-  ipcMain.on('screenshot:pin-move', (event, x: number, y: number) => {
-    try {
-      const win = BrowserWindow.fromWebContents(event.sender)
-      if (win && !win.isDestroyed()) {
-        win.setPosition(Math.round(x), Math.round(y))
-      }
-    } catch (e) {
-      console.error('screenshot:pin-move error:', e)
-    }
-  })
+  // 拖拽由 -webkit-app-region:drag 原生 OS 处理，无需手动 IPC 拖拽逻辑
+  // 彻底避免 Windows DWM 在透明窗口上 setBounds/setPosition 导致尺寸篡改 bug
 
   ipcMain.on('screenshot:pin-close', (event) => {
     try {
