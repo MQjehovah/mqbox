@@ -186,17 +186,17 @@ const displayMasks = computed<{ style: Record<string, string> }[]>(() => {
 /**
  * 选区指示器样式（仅显示边框 + 尺寸标签，不参与蒙版）
  */
-const selectionStyle = computed<Record<string, string>>(() => {
+const selectionStyle = computed(() => {
   const sel = selection.value
-  if (sel.width < 3 || sel.height < 3) return {}
+  if (sel.width < 3 || sel.height < 3) return {} as Record<string, string>
 
   // 找到选区所在的显示器，用其 physRect + scaleFactor 计算 CSS 坐标
   const targetDisp = displays.value.find(d =>
     sel.x >= d.bounds.x && sel.x < d.bounds.x + d.bounds.width
   )
-  if (!targetDisp) return {}
+  if (!targetDisp) return {} as Record<string, string>
   const r = physRects.value.get(targetDisp.id)
-  if (!r) return {}
+  if (!r) return {} as Record<string, string>
   const sf = targetDisp.scaleFactor
   const cssX = r.x + (sel.x - targetDisp.bounds.x) * sf
   const cssY = r.y + (sel.y - targetDisp.bounds.y) * sf
@@ -212,7 +212,7 @@ const selectionStyle = computed<Record<string, string>>(() => {
     border: '2px solid #00a8ff',
     pointerEvents: 'none',
     zIndex: '50'
-  }
+  } as Record<string, string>
 })
 
 /**
@@ -402,7 +402,7 @@ const onKeyDown = (e: KeyboardEvent) => {
 
     <!-- 每块显示器的标签（仅标签，不再包含截图 img） -->
     <div
-      v-for="(display, index) in displays"
+      v-for="display in displays"
       :key="'screen-' + display.id"
       class="screen-container"
       :style="getDisplayStyle(display)"
