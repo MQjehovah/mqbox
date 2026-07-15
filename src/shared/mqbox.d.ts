@@ -49,13 +49,20 @@ clipboard: {
   screenshot: {
     getAllScreens: () => Promise<{ displays: DisplayInfo[]; images: string[] }>
     capture: (x: number, y: number, width: number, height: number) => Promise<string | null>
+    captureFullscreen: () => Promise<string | null>
     start: () => void
     cancel: () => void
     showEditor: (dataUrl: string) => void
     pin: (dataUrl: string) => void
+    pinClose: () => void
+    pinMove: (dx: number, dy: number) => void
+    pinResize: (width: number, height: number, mouseX: number, mouseY: number) => void
     save: (dataUrl: string) => void
     closeEditor: () => void
     closeAllPins: () => void
+    getHistory: () => Promise<Array<{ id: string; dataUrl: string; time: number; type: string; width: number; height: number }>>
+    deleteHistory: (id: string) => Promise<void>
+    clearHistory: () => Promise<void>
   }
 }
 

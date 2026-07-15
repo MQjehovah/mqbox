@@ -105,6 +105,11 @@ export interface PluginFiles {
 export interface PluginScreenshot {
   start: () => Promise<void>
   captureRegion: (region: { x: number; y: number; width: number; height: number }) => Promise<string>
+  captureFullscreen: () => Promise<string | null>
+  showEditor: (dataUrl: string) => void
+  getHistory: () => Promise<Array<{ id: string; dataUrl: string; time: number; type: string; width: number; height: number }>>
+  deleteHistory: (id: string) => Promise<void>
+  clearHistory: () => Promise<void>
   getScreenshotList: () => Promise<{ id: string; path: string; timestamp: number }[]>
   deleteScreenshot: (id: string) => Promise<void>
 }

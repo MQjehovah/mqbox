@@ -2,16 +2,6 @@ import Panel from './Panel.vue'
 import Page from './Page.vue'
 import Editor from './Editor.vue'
 
-interface Capture {
-  id: string
-  path: string
-  time: string
-  type: 'region' | 'fullscreen' | 'window'
-}
-
-let captures: Capture[] = []
-let lastCapture: string | null = null
-
 export default {
   panel: Panel,
   page: Page,
@@ -19,76 +9,50 @@ export default {
 
   activate(context: any) {
     context.registerCommand('getPanelData', async () => {
+      const history = await context.screenshot?.getHistory()
+      const last = history && history.length > 0 ? history[0] : null
       return {
-        lastCapture,
-        captures
+        lastCapture: last,
+        captureCount: history ? history.length : 0
       }
     })
 
     context.registerCommand('getPageData', async () => {
+      const history = await context.screenshot?.getHistory()
       return {
-        lastCapture,
-        captures
+        captures: history || []
       }
     })
 
-context.registerCommand('region', async () => {
+    context.registerCommand('region', async () => {
       context.screenshot?.start()
       return { success: true }
     })
 
     context.registerCommand('fullscreen', async () => {
-      const capture: Capture = {
-        id: Date.now().toString(),
-        path: `/screenshot_${Date.now()}.png`,
-        time: new Date().toISOString(),
-        type: 'fullscreen'
+      const dataUrl = await context.screenshot?.captureFullscreen()
+      if (dataUrl) {
+        context.notification?.show?.('截图完成', '全屏截图已复制到剪贴板')
       }
-      captures.unshift(capture)
-      lastCapture = capture.time
-      return { success: true, capture }
-    })
-
-    context.registerCommand('window', async (args: any) => {
-      const capture: Capture = {
-        id: Date.now().toString(),
-        path: `/screenshot_${Date.now()}.png`,
-        time: new Date().toISOString(),
-        type: 'window'
-      }
-      captures.unshift(capture)
-      lastCapture = capture.time
-      return { success: true, capture }
-    })
-
-    context.registerCommand('cancel', async () => {
-      return { success: true }
-    })
-
-    context.registerCommand('capture', async (args: any) => {
-      const type = args?.type || 'region'
-      const capture: Capture = {
-        id: Date.now().toString(),
-        path: args?.path || `/screenshot_${Date.now()}.png`,
-        time: new Date().toISOString(),
-        type
-      }
-      captures.unshift(capture)
-      lastCapture = capture.time
-      return { success: true, capture }
+      return { success: !!dataUrl }
     })
 
     context.registerCommand('open', async (args: any) => {
-      if (args?.path) {
-        const capture = captures.find(c => c.path === args.path)
-        return { success: true, capture }
+      if (args?.dataUrl) {
+        context.screenshot?.showEditor(args.dataUrl)
       }
-      return { success: false }
+      return { success: true }
     })
 
     context.registerCommand('clear', async () => {
-      captures = []
-      lastCapture = null
+      await context.screenshot?.clearHistory()
+      return { success: true }
+    })
+
+    context.registerCommand('delete', async (args: any) => {
+      if (args?.id) {
+        await context.screenshot?.deleteHistory(args.id)
+      }
       return { success: true }
     })
 
@@ -114,21 +78,7 @@ context.registerCommand('region', async () => {
         ]
       }
     })
-
-    context.storage?.get('captures').then((data: any) => {
-      if (data && Array.isArray(data)) {
-        captures = data
-        if (captures.length > 0) {
-          lastCapture = captures[0].time
-        }
-      }
-    })
   },
 
-  deactivate() {
-    const context = (this as any).context
-    if (context?.storage) {
-      context.storage.set('captures', captures)
-    }
-  }
+  deactivate() {}
 }

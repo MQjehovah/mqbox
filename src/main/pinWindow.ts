@@ -81,33 +81,26 @@ export async function showEditor(dataUrl: string): Promise<void> {
 function buildPinSkeletonHtml(): string {
   return '<!DOCTYPE html><html><head><style>' +
     '*{margin:0;padding:0;box-sizing:border-box}' +
-    'html,body{width:100%;height:100%;overflow:hidden;cursor:default}' +
-    'body{background:transparent}' +
-    '#pin{position:relative;width:100%;height:100%;overflow:hidden}' +
-    '#pin-img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;user-select:none;-webkit-user-select:none}' +
-    '#close-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;transition:background .15s}' +
-    '#close-btn:hover{background:rgba(255,0,0,.7)}' +
+    'html,body{width:100%;height:100%;overflow:hidden;background:#fff}' +
+    '#pin{position:relative;width:100%;height:100%;overflow:hidden;-webkit-app-region:drag}' +
+    '#pin-img{width:100%;height:100%;display:block;pointer-events:none;user-select:none;-webkit-user-select:none;image-rendering:-webkit-optimize-contrast}' +
+    '#close-btn{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:none;' +
+    'background:rgba(0,0,0,.5);cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;' +
+    '-webkit-app-region:no-drag;transition:background .15s,opacity .15s;opacity:.5}' +
+    '#close-btn:hover{background:rgba(255,0,0,.8);opacity:1}' +
+    '#pin:hover #close-btn{opacity:.8}' +
     '</style></head><body>' +
-    '<div id="pin"><img id="pin-img"><button id="close-btn">\u2715</button></div>' +
-    '</body></html>'
+    '<div id="pin"><img id="pin-img">' +
+    '<button id="close-btn"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1.5 1.5L8.5 8.5M8.5 1.5L1.5 8.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg></button>' +
+    '</div></body></html>'
 }
 
-/**
- * 生成钉图窗口的注入脚本（通过 executeJavaScript 注入）
- * 设置 img.src、关闭按钮事件，以及 JS 版拖拽逻辑。
- *
- * 拖拽逻辑：mousedown→mousemove→mouseup，通过 IPC pin-move-delta 将位移发到主进程，
- * 主进程用 setBounds({x,y,width,height}) 锁定原始尺寸移动窗口，避免 DWM 篡改。
- */
 function buildPinInjectScript(safeUrl: string): string {
   return '(function(){' +
-    'var p=document.getElementById("pin"),c=document.getElementById("close-btn"),i=document.getElementById("pin-img");' +
+    'var i=document.getElementById("pin-img"),c=document.getElementById("close-btn");' +
     'i.src=' + safeUrl + ';' +
-    'c.addEventListener("click",function(e){e.stopPropagation();var a=window.mqbox;if(a&&a.screenshot&&a.screenshot.pinClose)a.screenshot.pinClose()});' +
-    'var dx=0,dy=0,ok=0,px=0,py=0;' +
-    'p.addEventListener("mousedown",function(e){ok=1;px=e.clientX;py=e.clientY});' +
-    'document.addEventListener("mousemove",function(e){if(!ok)return;dx=e.clientX-px;dy=e.clientY-py;px=e.clientX;py=e.clientY;var a=window.mqbox;if(a&&a.screenshot&&a.screenshot.send)a.screenshot.send("pin-move-delta",{dx:dx,dy:dy})});' +
-    'document.addEventListener("mouseup",function(){ok=0})' +
+    'c.addEventListener("click",function(e){e.stopPropagation();window.mqbox.screenshot.pinClose()})' +
+    // 拖拽由 -webkit-app-region:drag 原生处理，缩放由主进程 input-event 处理
     '})()'
 }
 
@@ -117,27 +110,25 @@ export async function pinImage(dataUrl: string): Promise<void> {
   const image = nativeImage.createFromDataURL(dataUrl)
   const size = image.getSize()
 
-  const maxWidth = 400
-  const maxHeight = 300
-  let width = size.width
-  let height = size.height
-
-  if (width > maxWidth) {
-    const ratio = maxWidth / width
-    width = maxWidth
-    height = Math.floor(height * ratio)
-  }
-  if (height > maxHeight) {
-    const ratio = maxHeight / height
-    height = maxHeight
-    width = Math.floor(width * ratio)
-  }
-
   const primaryDisplay = screen.getPrimaryDisplay()
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize
 
-  const initialX = Math.floor((screenWidth - width) / 2)
-  const initialY = Math.floor((screenHeight - height) / 2)
+  let width = size.width
+  let height = size.height
+
+  if (width > screenWidth * 0.9) {
+    const ratio = screenWidth * 0.9 / width
+    width = Math.floor(width * ratio)
+    height = Math.floor(height * ratio)
+  }
+  if (height > screenHeight * 0.9) {
+    const ratio = screenHeight * 0.9 / height
+    height = Math.floor(height * ratio)
+    width = Math.floor(width * ratio)
+  }
+
+  const initialX = Math.floor((screenWidth - width) / 2) + primaryDisplay.bounds.x
+  const initialY = Math.floor((screenHeight - height) / 2) + primaryDisplay.bounds.y
 
   const win = new BrowserWindow({
     width,
@@ -146,7 +137,8 @@ export async function pinImage(dataUrl: string): Promise<void> {
     y: initialY,
     show: false,
     frame: false,
-    transparent: true,
+    transparent: false,
+    backgroundColor: '#ffffff',
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
@@ -158,52 +150,54 @@ export async function pinImage(dataUrl: string): Promise<void> {
     }
   })
 
-  // ★ 存储原始尺寸，以备二次校验使用
-  pinOriginalSizeMap.set(win, { width, height })
+  console.log(`pinImage: image=${size.width}x${size.height}, window=${width}x${height} DIP, sf=${primaryDisplay.scaleFactor}`)
 
-  // 强制锁定窗口尺寸（Windows 透明窗口上 resizable:false 可能被忽略）
-  win.setMinimumSize(width, height)
-  win.setMaximumSize(width, height)
+  // ★ 缩放期望尺寸
+  ;(win as any)._expectedW = width
+  ;(win as any)._expectedH = height
 
-  // ===== ★ 防 DWM 拖拽尺寸篡改 =====
-  // 问题: Windows DWM 在拖拽透明无框窗口时会在 OS 层面修改窗口尺寸
-  // （横移变宽、纵移变高），setMinimumSize/setMaximumSize/resizable:false 均无法阻止。
-  //
-  // 修复:
-  // 1. resize 事件监听 — DWM 改尺寸会触发 resize 事件，立即纠正
-  // 2. 定时轮询 — 作为安全兜底（DWM 可能不触发 resize 事件）
+  // ★ Windows 原生消息钩子拦截滚轮（绕过 -webkit-app-region:drag 对 wheel 的拦截）
+  if (process.platform === 'win32') {
+    const WM_MOUSEWHEEL = 0x020A
+    win.hookWindowMessage(WM_MOUSEWHEEL, (wParam: Buffer, lParam: Buffer) => {
+      if (win.isDestroyed()) return
+      const zDelta = wParam.readInt16LE(2)
+      const screenX = lParam.readInt16LE(0)
+      const screenY = lParam.readInt16LE(2)
 
-  // ★ 监听 resize 事件，DWM 篡改后立即纠正回原始尺寸
-  win.on('resize', function onPinResize() {
-    if (win.isDestroyed()) return
-    const [curW, curH] = win.getSize()
-    if (curW !== width || curH !== height) {
-      win.setBounds({ x: win.x, y: win.y, width, height })
-    }
-  })
+      const factor = zDelta > 0 ? 1.15 : 1 / 1.15
+      const [curW, curH] = win.getSize()
+      const nw = Math.max(50, Math.round(curW * factor))
+      const nh = Math.max(50, Math.round(curH * factor))
 
-  // ★ 定时轮询作为安全兜底（DWM 可能在 resize 事件后再次篡改）
-  const correctionTimer = setInterval(() => {
-    if (win.isDestroyed()) { clearInterval(correctionTimer); return }
-    const [curW, curH] = win.getSize()
-    if (curW !== width || curH !== height) {
-      win.setBounds({ width, height })
-    }
-  }, 100)
+      const [winX, winY] = win.getPosition()
+      const mx = screenX - winX
+      const my = screenY - winY
+      const ratioX = mx / curW
+      const ratioY = my / curH
+      const newX = Math.round(winX + mx - ratioX * nw)
+      const newY = Math.round(winY + my - ratioY * nh)
 
-  // 步骤 1: 加载最小化 HTML 骨架（不含图片数据，只有 DOM 结构 + CSS）
-  // 使用 tiny data:text/html 而非 about:blank，避免 about:blank 下 did-finish-load 可靠性问题
+      ;(win as any)._expectedW = nw
+      ;(win as any)._expectedH = nh
+      win.setBounds({ x: newX, y: newY, width: nw, height: nh })
+    })
+  }
+
   const skeletonHtml = buildPinSkeletonHtml()
   win.loadURL('data:text/html,' + encodeURIComponent(skeletonHtml))
 
-  // 步骤 2: did-finish-load 后注入图片 src、关闭按钮事件和 JS 拖拽逻辑
+  // 转发 pin 窗口的 console 日志
+  win.webContents.on('console-message', (_, __, message) => {
+    console.log(`[Pin ${id}] ${message}`)
+  })
+
   win.webContents.once('did-finish-load', async () => {
     try {
       const safeUrl = JSON.stringify(dataUrl)
       const injectScript = buildPinInjectScript(safeUrl)
       await win.webContents.executeJavaScript(injectScript)
       if (!win.isDestroyed()) {
-        win.setSize(width, height)
         win.show()
         win.focus()
       }
@@ -217,7 +211,6 @@ export async function pinImage(dataUrl: string): Promise<void> {
   })
 
   win.on('closed', () => {
-    clearInterval(correctionTimer)
     pinWindows.delete(id)
     clearPinOriginalSize(win)
   })

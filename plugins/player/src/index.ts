@@ -345,6 +345,33 @@ export default {
       return getState()
     })
 
+    context.registerCommand('importDirectory', async (args: any) => {
+      console.log('[player] importDirectory called, files API:', !!context.files, !!context.files?.openDirectory)
+      const playlistId = args?.playlistId || currentPlaylistId
+      if (!playlistId) return getState()
+      const playlist = playlists.find(p => p.id === playlistId)
+      if (!playlist) return getState()
+
+      const dirPath = await context.files?.openDirectory?.()
+      console.log('[player] openDirectory result:', dirPath)
+      if (!dirPath) return getState()
+
+      const audioFiles: { name: string; path: string }[] = await context.files?.listAudio?.(dirPath) || []
+      for (const file of audioFiles) {
+        const track: Track = {
+          id: generateId(),
+          name: file.name,
+          source: 'local',
+          path: file.path
+        }
+        tracks[track.id] = track
+        playlist.trackIds.push(track.id)
+      }
+
+      await saveState()
+      return getState()
+    })
+
     context.registerSearchProvider({
       keyword: 'play',
       name: '播放器',

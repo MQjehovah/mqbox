@@ -292,6 +292,11 @@ async function selectPlaylist(id: string) {
 async function clearPlaylist(id: string) {
   await props.execute('clearPlaylist', { playlistId: id })
 }
+
+async function importDirectory() {
+  if (!activePlaylist.value) return
+  await props.execute('importDirectory', { playlistId: activePlaylist.value.id })
+}
 </script>
 
 <template>
@@ -384,6 +389,15 @@ async function clearPlaylist(id: string) {
                 <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
               </svg>
               添加
+            </button>
+            <button
+              class="h-7 rounded-md bg-purple-500 text-white text-xs px-3 hover:bg-purple-600 flex items-center gap-1"
+              @click="importDirectory"
+            >
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"/>
+              </svg>
+              导入文件夹
             </button>
             <button
               class="h-7 rounded-md bg-gray-100 text-gray-600 text-xs px-3 hover:bg-gray-200"

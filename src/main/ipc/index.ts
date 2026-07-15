@@ -1,9 +1,11 @@
-import { ipcMain, clipboard, BrowserWindow, shell } from 'electron'
+import { ipcMain, clipboard, BrowserWindow, shell, dialog } from 'electron'
+import { readdirSync, statSync } from 'fs'
+import { join, extname } from 'path'
 import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProviders, reloadPlugins, getPluginPanels, getPluginPage, getPluginConfig, getPluginDirName } from '../plugin/host'
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
-import { captureAllScreens, captureRegion, startScreenshot, cancelScreenshot, getCachedScreenshot } from '../screenshot'
+import { captureAllScreens, captureRegion, captureFullscreen, startScreenshot, cancelScreenshot, getCachedScreenshot, addToHistory, getHistory, deleteFromHistory, clearHistory } from '../screenshot'
 import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
 export function setupIPC() {
@@ -261,6 +263,48 @@ export function setupIPC() {
     }
   })
 
+  ipcMain.handle('dialog:open-directory', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: '选择音频文件夹',
+        properties: ['openDirectory']
+      })
+      if (result.canceled || result.filePaths.length === 0) return null
+      return result.filePaths[0]
+    } catch (e) {
+      console.error('dialog:open-directory error:', e)
+      return null
+    }
+  })
+
+  const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac', '.webm', '.opus', '.wma']
+
+  ipcMain.handle('files:list-audio', async (_, dirPath: string) => {
+    try {
+      const files: { name: string; path: string }[] = []
+      function scan(dir: string, depth: number) {
+        if (depth > 2) return
+        const entries = readdirSync(dir)
+        for (const entry of entries) {
+          const fullPath = join(dir, entry)
+          try {
+            const stat = statSync(fullPath)
+            if (stat.isDirectory()) {
+              scan(fullPath, depth + 1)
+            } else if (AUDIO_EXTENSIONS.includes(extname(entry).toLowerCase())) {
+              files.push({ name: entry.replace(/\.[^.]+$/, ''), path: fullPath })
+            }
+          } catch { /* skip */ }
+        }
+      }
+      scan(dirPath, 0)
+      return files
+    } catch (e) {
+      console.error('files:list-audio error:', e)
+      return []
+    }
+  })
+
   ipcMain.handle('screenshot:get-all-screens', async () => {
     try {
       // ★ 优先返回 pre-capture 的缓存数据（startScreenshot 中先捕获再显示窗口）
@@ -281,6 +325,7 @@ ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: numb
     try {
       const dataUrl = await captureRegion(x, y, width, height)
       if (dataUrl) {
+        addToHistory(dataUrl, 'region', width, height)
         cancelScreenshot()
         showEditor(dataUrl)
       }
@@ -289,6 +334,28 @@ ipcMain.handle('screenshot:capture', async (_, x: number, y: number, width: numb
       console.error('screenshot:capture error:', e)
       return null
     }
+  })
+
+  ipcMain.handle('screenshot:capture-fullscreen', async () => {
+    try {
+      const dataUrl = await captureFullscreen()
+      return dataUrl
+    } catch (e) {
+      console.error('screenshot:capture-fullscreen error:', e)
+      return null
+    }
+  })
+
+  ipcMain.handle('screenshot:get-history', async () => {
+    return getHistory()
+  })
+
+  ipcMain.handle('screenshot:delete-history', async (_, id: string) => {
+    deleteFromHistory(id)
+  })
+
+  ipcMain.handle('screenshot:clear-history', async () => {
+    clearHistory()
   })
 
   ipcMain.on('screenshot:start', async () => {
@@ -332,11 +399,28 @@ ipcMain.on('screenshot:cancel', () => {
       const win = BrowserWindow.fromWebContents(event.sender)
       if (!win || win.isDestroyed()) return
       const [x, y] = win.getPosition()
-      const [w, h] = win.getSize()
-      // 锁定原始尺寸移动窗口
-      win.setBounds({ x: x + dx, y: y + dy, width: w, height: h })
+      win.setPosition(x + dx, y + dy)
     } catch (e) {
       console.error('screenshot:pin-move-delta error:', e)
+    }
+  })
+
+  ipcMain.on('screenshot:pin-resize', (event, { width, height, mouseX, mouseY }: { width: number; height: number; mouseX: number; mouseY: number }) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win || win.isDestroyed()) return
+      const [x, y] = win.getPosition()
+      const [oldW, oldH] = win.getSize()
+      const ratioX = mouseX / oldW
+      const ratioY = mouseY / oldH
+      const newX = Math.round(x + mouseX - ratioX * width)
+      const newY = Math.round(y + mouseY - ratioY * height)
+      // 先更新期望尺寸，防止 resize 事件纠正回旧值
+      ;(win as any)._expectedW = width
+      ;(win as any)._expectedH = height
+      win.setBounds({ x: newX, y: newY, width, height })
+    } catch (e) {
+      console.error('screenshot:pin-resize error:', e)
     }
   })
 

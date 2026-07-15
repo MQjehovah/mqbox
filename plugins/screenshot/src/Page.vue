@@ -1,15 +1,16 @@
 <script setup lang="ts">
-interface Capture {
+interface CaptureRecord {
   id: string
-  path: string
-  time: string
-  type: 'region' | 'fullscreen' | 'window'
+  dataUrl: string
+  time: number
+  type: string
+  width: number
+  height: number
 }
 
 interface Props {
   data: {
-    lastCapture: string | null
-    captures: Capture[]
+    captures: CaptureRecord[]
   }
   execute: (action: string, args?: unknown) => Promise<unknown>
   close: () => void
@@ -17,10 +18,9 @@ interface Props {
 
 defineProps<Props>()
 
-const formatTime = (isoString: string) => {
-  if (!isoString) return ''
-  const date = new Date(isoString)
-  return date.toLocaleString('zh-CN', { 
+const formatTime = (time: number) => {
+  if (!time) return ''
+  return new Date(time).toLocaleString('zh-CN', { 
     month: '2-digit', 
     day: '2-digit', 
     hour: '2-digit', 
@@ -31,8 +31,7 @@ const formatTime = (isoString: string) => {
 const getTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
     region: '区域',
-    fullscreen: '全屏',
-    window: '窗口'
+    fullscreen: '全屏'
   }
   return labels[type] || type
 }
@@ -43,7 +42,7 @@ const getTypeLabel = (type: string) => {
     <div class="p-4 bg-gray-100 border-b border-gray-200">
       <div class="flex items-center justify-between mb-4">
         <span class="text-sm text-gray-800 font-medium">截图工具</span>
-        <span class="text-xs text-gray-400">{{ data.captures.length }} 张截图</span>
+        <span class="text-xs text-gray-400">{{ data?.captures?.length || 0 }} 张截图</span>
       </div>
       
       <div class="flex gap-3">
@@ -70,7 +69,7 @@ const getTypeLabel = (type: string) => {
     </div>
 
     <div class="flex-1 overflow-auto p-2">
-      <div v-if="data.captures.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
+      <div v-if="!data?.captures || data.captures.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400">
         <svg class="w-12 h-12 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -85,18 +84,20 @@ const getTypeLabel = (type: string) => {
           v-for="capture in data.captures"
           :key="capture.id"
           class="aspect-video rounded-lg bg-gray-100 overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 relative group"
-          @click="execute('open', { path: capture.path })"
+          @click="execute('open', { dataUrl: capture.dataUrl })"
         >
-          <div class="absolute inset-0 bg-gray-200 flex items-center justify-center">
-            <svg class="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21,15 16,10 5,21"/>
-            </svg>
-          </div>
+          <img :src="capture.dataUrl" class="w-full h-full object-cover" />
           <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {{ getTypeLabel(capture.type) }} · {{ formatTime(capture.time) }}
           </div>
+          <button 
+            class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+            @click.stop="execute('delete', { id: capture.id })"
+          >
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

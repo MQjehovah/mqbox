@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-interface Capture {
+interface CaptureRecord {
   id: string
-  path: string
-  time: string
-  type: 'region' | 'fullscreen' | 'window'
+  dataUrl: string
+  time: number
+  type: string
+  width: number
+  height: number
 }
 
 interface Props {
   data: {
-    lastCapture: string | null
-    captures: Capture[]
+    lastCapture: CaptureRecord | null
+    captureCount: number
   }
   execute: (action: string, args?: unknown) => Promise<unknown>
   openPage?: () => void
@@ -20,17 +22,15 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const captureCount = computed(() => props.data.captures?.length || 0)
+const captureCount = computed(() => props.data?.captureCount || 0)
 
-const formatTime = (isoString: string | null) => {
-  if (!isoString) return '暂无'
-  const date = new Date(isoString)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
+const formatTime = (time: number | null) => {
+  if (!time) return '暂无'
+  const diff = Date.now() - time
   if (diff < 60000) return '刚刚'
   if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
   if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  return date.toLocaleDateString()
+  return new Date(time).toLocaleDateString()
 }
 </script>
 
@@ -50,7 +50,7 @@ const formatTime = (isoString: string | null) => {
           <span class="text-xs text-gray-400">{{ captureCount }} 张截图</span>
         </div>
       </div>
-      <button v-if="openPage" class="text-gray-400 cursor-pointer" @click="openPage">
+      <button v-if="openPage" class="text-gray-400 cursor-pointer hover:text-gray-600" @click="openPage">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m9 18 6-6-6-6"/>
         </svg>
@@ -79,9 +79,14 @@ const formatTime = (isoString: string | null) => {
       </button>
     </div>
 
-    <div class="text-xs text-gray-400">
-      最近截图: {{ formatTime(data.lastCapture) }}
+    <div v-if="data?.lastCapture" class="flex items-center gap-2 cursor-pointer rounded-md hover:bg-gray-50 p-1" @click="execute('open', { dataUrl: data.lastCapture.dataUrl })">
+      <img :src="data.lastCapture.dataUrl" class="w-12 h-8 object-cover rounded border border-gray-200" />
+      <div class="flex flex-col">
+        <span class="text-xs text-gray-500">{{ data.lastCapture.type === 'fullscreen' ? '全屏' : '区域' }} {{ data.lastCapture.width }}×{{ data.lastCapture.height }}</span>
+        <span class="text-xs text-gray-400">{{ formatTime(data.lastCapture.time) }}</span>
+      </div>
     </div>
+    <div v-else class="text-xs text-gray-400">暂无截图</div>
   </div>
 </template>
 
