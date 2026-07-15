@@ -323,8 +323,22 @@ ipcMain.on('screenshot:cancel', () => {
     }
   })
 
-  // 拖拽由 -webkit-app-region:drag 原生 OS 处理，无需手动 IPC 拖拽逻辑
-  // 彻底避免 Windows DWM 在透明窗口上 setBounds/setPosition 导致尺寸篡改 bug
+  // JS 拖拽模式：注入脚本通过 IPC pin-move-delta 发送位移量，
+  // 主进程用 setBounds({x,y,width,height}) 锁定原始尺寸移动窗口，
+  // 避免 Windows DWM 在透明窗口上 setBounds/setPosition 导致尺寸篡改 bug
+
+  ipcMain.on('screenshot:pin-move-delta', (event, { dx, dy }: { dx: number; dy: number }) => {
+    try {
+      const win = BrowserWindow.fromWebContents(event.sender)
+      if (!win || win.isDestroyed()) return
+      const [x, y] = win.getPosition()
+      const [w, h] = win.getSize()
+      // 锁定原始尺寸移动窗口
+      win.setBounds({ x: x + dx, y: y + dy, width: w, height: h })
+    } catch (e) {
+      console.error('screenshot:pin-move-delta error:', e)
+    }
+  })
 
   ipcMain.on('screenshot:pin-close', (event) => {
     try {

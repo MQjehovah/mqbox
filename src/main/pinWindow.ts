@@ -73,19 +73,19 @@ export async function showEditor(dataUrl: string): Promise<void> {
 
 /**
  * 生成钉图窗口的最小化 HTML 骨架（不含图片数据，避免大图 data:URL 触发布局正反馈）
- * 搭配 buildPinInjectScript() 通过 executeJavaScript 注入图片 src。
+ * 搭配 buildPinInjectScript() 通过 executeJavaScript 注入图片 src 和拖拽逻辑。
  *
- * 拖拽采用 -webkit-app-region:drag 原生 OS 窗口拖拽，而非手动 mousemove→setBounds，
- * 彻底避免 Windows DWM 在透明窗口上 setBounds 导致的尺寸篡改 bug（Electron #48247）。
+ * 不再使用 -webkit-app-region:drag 原生 OS 拖拽（Windows DWM 会篡改无框透明窗口尺寸），
+ * 改为 JS 版拖拽（mousedown/mousemove/mouseup + IPC pin-move-delta → setBounds 锁定尺寸）。
  */
 function buildPinSkeletonHtml(): string {
   return '<!DOCTYPE html><html><head><style>' +
     '*{margin:0;padding:0;box-sizing:border-box}' +
     'html,body{width:100%;height:100%;overflow:hidden;cursor:default}' +
     'body{background:transparent}' +
-    '#pin{position:relative;width:100%;height:100%;overflow:hidden;-webkit-app-region:drag}' +
+    '#pin{position:relative;width:100%;height:100%;overflow:hidden}' +
     '#pin-img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;user-select:none;-webkit-user-select:none}' +
-    '#close-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;transition:background .15s;-webkit-app-region:no-drag}' +
+    '#close-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:14px;line-height:24px;text-align:center;cursor:pointer;z-index:1000;padding:0;display:flex;align-items:center;justify-content:center;transition:background .15s}' +
     '#close-btn:hover{background:rgba(255,0,0,.7)}' +
     '</style></head><body>' +
     '<div id="pin"><img id="pin-img"><button id="close-btn">\u2715</button></div>' +
@@ -94,16 +94,20 @@ function buildPinSkeletonHtml(): string {
 
 /**
  * 生成钉图窗口的注入脚本（通过 executeJavaScript 注入）
- * 只设置 img.src 和关闭按钮事件，不重建 DOM。
+ * 设置 img.src、关闭按钮事件，以及 JS 版拖拽逻辑。
  *
- * 拖拽由 OS 原生处理（-webkit-app-region:drag），无需任何手动 mousemove→setBounds
- * 逻辑，彻底消除 Windows DWM 自动修改窗口尺寸的 bug。
+ * 拖拽逻辑：mousedown→mousemove→mouseup，通过 IPC pin-move-delta 将位移发到主进程，
+ * 主进程用 setBounds({x,y,width,height}) 锁定原始尺寸移动窗口，避免 DWM 篡改。
  */
 function buildPinInjectScript(safeUrl: string): string {
   return '(function(){' +
-    'var c=document.getElementById("close-btn");' +
-    'document.getElementById("pin-img").src=' + safeUrl + ';' +
+    'var p=document.getElementById("pin"),c=document.getElementById("close-btn"),i=document.getElementById("pin-img");' +
+    'i.src=' + safeUrl + ';' +
     'c.addEventListener("click",function(e){e.stopPropagation();var a=window.mqbox;if(a&&a.screenshot&&a.screenshot.pinClose)a.screenshot.pinClose()});' +
+    'var dx=0,dy=0,ok=0,px=0,py=0;' +
+    'p.addEventListener("mousedown",function(e){ok=1;px=e.clientX;py=e.clientY});' +
+    'document.addEventListener("mousemove",function(e){if(!ok)return;dx=e.clientX-px;dy=e.clientY-py;px=e.clientX;py=e.clientY;var a=window.mqbox;if(a&&a.screenshot&&a.screenshot.send)a.screenshot.send("pin-move-delta",{dx:dx,dy:dy})});' +
+    'document.addEventListener("mouseup",function(){ok=0})' +
     '})()'
 }
 
@@ -192,8 +196,7 @@ export async function pinImage(dataUrl: string): Promise<void> {
   const skeletonHtml = buildPinSkeletonHtml()
   win.loadURL('data:text/html,' + encodeURIComponent(skeletonHtml))
 
-  // 步骤 2: did-finish-load 后注入图片 src 和关闭按钮事件
-  // 拖拽由 OS 原生 -webkit-app-region:drag 处理，无需手动拖拽逻辑
+  // 步骤 2: did-finish-load 后注入图片 src、关闭按钮事件和 JS 拖拽逻辑
   win.webContents.once('did-finish-load', async () => {
     try {
       const safeUrl = JSON.stringify(dataUrl)
