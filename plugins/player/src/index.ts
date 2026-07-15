@@ -18,6 +18,7 @@ interface PlaylistInfo {
 interface PlayerStorage {
   playlists: PlaylistInfo[]
   tracks: Record<string, Track>
+  currentPlaylistId: string | null
   volume: number
   playMode: 'sequence' | 'loop' | 'shuffle'
 }
@@ -67,14 +68,20 @@ export default {
     if (saved) {
       playlists = saved.playlists || []
       tracks = saved.tracks || {}
+      currentPlaylistId = saved.currentPlaylistId || null
       volume = saved.volume ?? 80
       playMode = saved.playMode || 'sequence'
+    }
+
+    if (!currentPlaylistId || !playlists.find(p => p.id === currentPlaylistId)) {
+      currentPlaylistId = playlists.length > 0 ? playlists[0].id : null
     }
 
     async function saveState() {
       await context.storage?.set('playerData', {
         playlists,
         tracks,
+        currentPlaylistId,
         volume,
         playMode
       })

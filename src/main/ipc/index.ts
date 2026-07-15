@@ -5,7 +5,7 @@ import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProvi
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
-import { getCustomShortcuts, addCustomShortcut, removeCustomShortcut } from '../shortcut'
+import { getCustomShortcuts, addCustomShortcut, removeCustomShortcut, getBuiltinShortcuts, updateBuiltinShortcut } from '../shortcut'
 import { captureAllScreens, captureRegion, captureFullscreen, startScreenshot, cancelScreenshot, getCachedScreenshot, addToHistory, getHistory, deleteFromHistory, clearHistory } from '../screenshot'
 import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
@@ -482,6 +482,15 @@ ipcMain.on('screenshot:cancel', () => {
 
   ipcMain.handle('shortcut:remove', async (_, accelerator: string) => {
     await removeCustomShortcut(accelerator)
+    return { success: true }
+  })
+
+  ipcMain.handle('shortcut:get-builtin', async () => {
+    return getBuiltinShortcuts()
+  })
+
+  ipcMain.handle('shortcut:update-builtin', async (_, { key, accelerator }: { key: string; accelerator: string }) => {
+    await updateBuiltinShortcut(key, accelerator)
     return { success: true }
   })
 }

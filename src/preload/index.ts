@@ -69,7 +69,9 @@ screenshot: {
     list: () => ipcRenderer.invoke('shortcut:list'),
     add: (binding: { accelerator: string; pluginId: string; command: string; args?: any; label?: string }) =>
       ipcRenderer.invoke('shortcut:add', binding),
-    remove: (accelerator: string) => ipcRenderer.invoke('shortcut:remove', accelerator)
+    remove: (accelerator: string) => ipcRenderer.invoke('shortcut:remove', accelerator),
+    getBuiltin: () => ipcRenderer.invoke('shortcut:get-builtin'),
+    updateBuiltin: (key: string, accelerator: string) => ipcRenderer.invoke('shortcut:update-builtin', { key, accelerator })
   }
 }
 

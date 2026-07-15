@@ -58,3 +58,31 @@ export async function removeCustomShortcut(accelerator: string) {
 
   await setConfig('customShortcuts', config.customShortcuts)
 }
+
+export function getBuiltinShortcuts() {
+  const s = getConfig().shortcut
+  return [
+    { key: 'toggle', accelerator: s.toggle, label: '切换主窗口', editable: true },
+    { key: 'search', accelerator: s.search, label: '全局搜索', editable: true },
+  ]
+}
+
+export async function updateBuiltinShortcut(key: string, accelerator: string) {
+  if (key !== 'toggle' && key !== 'search') return
+
+  const config = getConfig()
+  const oldAccel = (config.shortcut as any)[key]
+  if (!oldAccel) return
+
+  globalShortcut.unregister(oldAccel)
+
+  ;(config.shortcut as any)[key] = accelerator
+
+  if (key === 'toggle') {
+    globalShortcut.register(accelerator, () => toggleWindow('main'))
+  } else if (key === 'search') {
+    globalShortcut.register(accelerator, () => toggleWindow('search'))
+  }
+
+  await setConfig('shortcut', config.shortcut)
+}

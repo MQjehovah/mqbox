@@ -68,6 +68,8 @@ clipboard: {
     list: () => Promise<Array<{ accelerator: string; pluginId: string; command: string; args?: any; label?: string }>>
     add: (binding: { accelerator: string; pluginId: string; command: string; args?: any; label?: string }) => Promise<{ success: boolean }>
     remove: (accelerator: string) => Promise<{ success: boolean }>
+    getBuiltin: () => Promise<Array<{ key: string; accelerator: string; label: string; editable: boolean }>>
+    updateBuiltin: (key: string, accelerator: string) => Promise<{ success: boolean }>
   }
 }
 
