@@ -16,6 +16,8 @@
     ],
     "builtin": true,
     "defaultSearch": true,
+    "hasConfig": true,
+    "configPage": "./dist/Config.js",
     "hasPanel": false,
     "hasPage": false
   },

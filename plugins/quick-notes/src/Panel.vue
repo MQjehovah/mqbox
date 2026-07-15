@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-interface Note {
-  id: string
-  content: string
-  tags: string[]
-  time: number
-}
+import { ref, computed } from 'vue'
+import type { Note } from './types'
+import NoteDetail from './NoteDetail.vue'
 
 interface Props {
   data: {
@@ -23,6 +18,31 @@ const recentNotes = computed(() => {
   return props.data.notes.slice(0, 2)
 })
 
+// 笔记详情面板
+const selectedNote = ref<Note | null>(null)
+
+const handleSelectNote = (note: Note) => {
+  selectedNote.value = note
+}
+
+const handleCloseDetail = () => {
+  selectedNote.value = null
+}
+
+const handleNoteUpdated = (updated: Note) => {
+  // 同步更新本地数据中的笔记内容
+  const idx = props.data.notes.findIndex((n: Note) => n.id === updated.id)
+  if (idx !== -1) {
+    props.data.notes[idx] = updated
+  }
+  selectedNote.value = updated
+}
+
+const handleNoteDeleted = async (_id: string) => {
+  selectedNote.value = null
+  await props.refresh()
+}
+
 const formatTime = (timestamp: number) => {
   const date = new Date(timestamp)
   const now = new Date()
@@ -30,7 +50,7 @@ const formatTime = (timestamp: number) => {
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
-  
+
   if (diffMins < 1) return '刚刚'
   if (diffMins < 60) return `${diffMins}分钟前`
   if (diffHours < 24) return `${diffHours}小时前`
@@ -61,17 +81,18 @@ const formatTime = (timestamp: number) => {
     </div>
 
     <div v-if="recentNotes.length > 0" class="flex flex-col gap-1.5">
-      <div 
-        v-for="note in recentNotes" 
+      <div
+        v-for="note in recentNotes"
         :key="note.id"
         class="p-2 rounded-md bg-gray-50 hover:bg-gray-100 cursor-pointer"
+        @click="handleSelectNote(note)"
       >
         <div class="text-xs text-gray-800 line-clamp-2">{{ note.content }}</div>
         <div class="flex items-center gap-1 mt-1">
           <span class="text-xs text-gray-400">{{ formatTime(note.time) }}</span>
           <div v-if="note.tags.length > 0" class="flex gap-0.5">
-            <span 
-              v-for="tag in note.tags.slice(0, 2)" 
+            <span
+              v-for="tag in note.tags.slice(0, 2)"
               :key="tag"
               class="text-xs px-1 py-0.5 rounded bg-yellow-100 text-yellow-600"
             >
@@ -86,7 +107,7 @@ const formatTime = (timestamp: number) => {
       <span class="text-xs text-gray-400">暂无笔记</span>
     </div>
 
-    <button 
+    <button
       class="w-full h-7 rounded-md bg-yellow-500 text-white text-xs font-medium hover:bg-yellow-600 flex items-center justify-center gap-1"
       @click="execute('add', { content: '', tags: [] })"
     >
@@ -96,6 +117,16 @@ const formatTime = (timestamp: number) => {
       添加笔记
     </button>
   </div>
+
+  <!-- 笔记详情弹窗 -->
+  <NoteDetail
+    v-if="selectedNote"
+    :note="selectedNote"
+    :execute="execute"
+    @close="handleCloseDetail"
+    @updated="handleNoteUpdated"
+    @deleted="handleNoteDeleted"
+  />
 </template>
 
 <style scoped>

@@ -36,8 +36,14 @@ jobs:
         run: npx tsc --noEmit
         continue-on-error: true # 如果没有配置 tsconfig 则不会阻断
 
-      - name: Unit tests
+      - name: Unit tests (core)
         run: npx vitest run --config tests/vitest.config.ts --reporter verbose
+
+      - name: Install quick-notes plugin deps
+        run: cd plugins/quick-notes && npm ci
+
+      - name: Unit tests (quick-notes plugin)
+        run: cd plugins/quick-notes && npx vitest run --reporter verbose
 
       - name: Security scan - keys & secrets
         run: |
@@ -86,6 +92,13 @@ jobs:
 
       - name: Build main process
         run: npx vite build --config vite.config.ts
+
+      - name: Install & build quick-notes plugin
+        run: |
+          cd plugins/quick-notes
+          npm ci
+          npx vitest run --reporter verbose
+          npx vite build
 
       - name: Verify build output
         run: |

@@ -1,6 +1,6 @@
 # API 参考
 
-> 本文档基于 `src/main/screenshot.ts`、`src/main/index.ts` 以及 IPC 接口自动提取。
+> 本文档基于 `src/main/screenshot.ts`、`src/main/index.ts`、`plugins/quick-notes/src/` 以及 IPC 接口自动提取。
 
 ---
 
@@ -159,3 +159,163 @@ context.screenshot?.start()   // 调用截图（需 permissions: ["screenshot"]�
   }
 }
 ```
+
+---
+
+## 快速笔记插件 API (`plugins/quick-notes/src/`)
+
+### 共享类型 (`types.ts`)
+
+```typescript
+export interface Note {
+  id: string
+  content: string
+  tags: string[]
+  time: number        // Unix 时间戳（毫秒）
+}
+```
+
+所有组件统一引用此接口，确保类型一致。
+
+---
+
+### 插件入口 (`index.ts`)
+
+```typescript
+// 注册面板组件
+context.registerPanelComponent('quick-notes-panel', Panel)
+
+// 注册页面组件（详情页）
+context.registerPageComponent('quick-notes-page', Page)
+
+// 注册命令
+context.registerCommand('quick-notes:open', handler)    // 呼出搜索/创建面板
+context.registerCommand('quick-notes:toggle', handler)  // 切换面板显示
+```
+
+#### 命令说明
+
+| 命令 | 说明 |
+|------|------|
+| `quick-notes:open` | 打开快速笔记面板 |
+| `quick-notes:toggle` | 切换面板显示/隐藏 |
+
+#### 插件配置 (`package.json`)
+
+```json
+{
+  "name": "mqbox-plugin-quick-notes",
+  "version": "1.0.0",
+  "displayName": "快速笔记",
+  "mqbox": {
+    "id": "quick-notes",
+    "permissions": []
+  }
+}
+```
+
+---
+
+### 面板组件 (`Panel.vue`)
+
+面板内展示笔记列表，点击笔记条目打开详情弹窗。
+
+#### Props
+
+| 属性 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `notes` | `Note[]` | 否 | 笔记列表（默认从 localStorage 读取） |
+| `context` | `object` | 否 | MQBox 插件上下文 |
+
+#### Emits
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `selected` | `note: Note` | 选中某条笔记（打开详情） |
+| `updated` | `notes: Note[]` | 笔记列表变更（增/删/改） |
+
+#### 内部方法
+
+| 方法 | 说明 |
+|------|------|
+| `loadNotes()` | 从 localStorage(`quick-notes`) 加载笔记列表 |
+| `saveNotes(notes)` | 保存笔记列表到 localStorage |
+| `selectNote(note)` | 选中笔记 → 触发 `selected` 事件打开详情 |
+| `deleteNote(id, event)` | 删除指定 ID 的笔记，阻止事件冒泡 |
+| `closeDetail()` | 关闭详情弹窗，清空 `selectedNote` |
+| `handleUpdate(note)` | 接收详情组件发出的更新，保存并刷新列表 |
+
+#### 数据流
+
+```
+用户点击笔记条目
+  → Panel.selectNote(note)
+  → Panel.selectedNote = note（触发详情弹窗渲染）
+  → NoteDetail 组件接收 note prop
+  → 用户编辑/删除
+  → NoteDetail emit('updated', updatedNote)
+  → Panel.handleUpdate() 保存并刷新
+  → Panel.closeDetail() 关闭弹窗
+```
+
+---
+
+### 详情弹窗组件 (`NoteDetail.vue`)
+
+面板内展开的笔记详情弹窗，支持查看完整内容、编辑、删除。
+
+#### Props
+
+| 属性 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `note` | `Note` | **是** | 要展示的笔记对象 |
+| `compact` | `boolean` | 否 | 紧凑模式（默认 `false`） |
+
+#### Emits
+
+| 事件 | 参数 | 说明 |
+|------|------|------|
+| `close` | — | 关闭详情弹窗 |
+| `updated` | `note: Note` | 笔记内容已编辑保存（父组件需更新列表） |
+| `deleted` | `noteId: string` | 笔记已被删除（父组件需从列表移除） |
+
+#### 内部状态
+
+| 状态 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `isEditing` | `boolean` | `false` | 是否处于编辑模式 |
+| `editContent` | `string` | `''` | 编辑框中的内容 |
+| `editTags` | `string` | `''` | 编辑框中的标签（逗号分隔） |
+
+#### 键盘快捷键
+
+| 按键 | 动作 | 说明 |
+|------|------|------|
+| `Escape` | 关闭弹窗 | 查看/编辑模式均有效 |
+| `Ctrl+Enter` / `Cmd+Enter` | 保存编辑 | 仅在编辑模式下有效 |
+
+#### 生命周期
+
+- `onMounted`: 监听全局 `keydown` 事件
+- `onUnmounted`: 移除全局 `keydown` 监听
+
+---
+
+### 独立页面组件 (`Page.vue`)
+
+独立页面视图（非面板内嵌方式），功能与面板详情弹窗一致。
+
+#### Props
+
+| 属性 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `context` | `object` | 否 | MQBox 插件上下文 |
+
+#### 与 Panel.vue 的区别
+
+| 对比项 | `Panel.vue` | `NoteDetail.vue` | `Page.vue` |
+|--------|------------|-------------------|------------|
+| 定位 | 面板列表容器 | 详情弹窗组件 | 独立详情页 |
+| 管理笔记列表 | ✅ 是 | ❌ 否 | ❌ 否 |
+| 查看/编辑/删除 | ❌ 委托给 NoteDetail | ✅ 是 | ✅ 是 |
+| 弹出方式 | 面板内嵌 | 浮层弹窗（卡片样式） | 全页路由 |

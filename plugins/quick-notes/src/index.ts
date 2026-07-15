@@ -1,12 +1,6 @@
 import Panel from './Panel.vue'
 import Page from './Page.vue'
-
-interface Note {
-  id: string
-  content: string
-  tags: string[]
-  time: number
-}
+import type { Note } from './types'
 
 let notes: Note[] = []
 
@@ -17,7 +11,7 @@ function generateId(): string {
 export default {
   panel: Panel,
   page: Page,
-  
+
   activate(context: any) {
     context.registerCommand('getPanelData', async () => {
       return { notes }
@@ -58,7 +52,7 @@ export default {
       }
       if (args?.keyword) {
         const keyword = args.keyword.toLowerCase()
-        result = result.filter(n => 
+        result = result.filter(n =>
           n.content.toLowerCase().includes(keyword) ||
           n.tags.some(t => t.toLowerCase().includes(keyword))
         )
@@ -80,12 +74,12 @@ export default {
             pluginId: 'quick-notes'
           }]
         }
-        
-        const results = notes.filter(n => 
+
+        const results = notes.filter(n =>
           n.content.toLowerCase().includes(query.toLowerCase()) ||
           n.tags.some(t => t.toLowerCase().includes(query.toLowerCase()))
         )
-        
+
         return results.slice(0, 5).map(note => ({
           title: note.content.slice(0, 50),
           subtitle: note.tags.join(', ') || '无标签',

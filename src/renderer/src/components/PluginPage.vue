@@ -37,7 +37,7 @@ onUnmounted(() => {
 })
 
 const onPluginExecuted = async (data: { pluginId: string; action: string }) => {
-  if (data.pluginId === pluginId.value && data.action !== 'getPageData' && data.action !== 'updateProgress') {
+  if (data.pluginId === pluginId.value && data.action !== 'getPageData' && data.action !== 'getPanelData' && data.action !== 'updateProgress') {
     pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
   }
 }
@@ -46,11 +46,11 @@ const loadPage = async () => {
   isLoading.value = true
   console.log(`Loading page for plugin: ${pluginId.value}`)
   console.log(`Available page components:`, Object.keys(pluginComponents))
-  
+
   try {
     pageComponent.value = pluginComponents[pluginId.value] || null
     console.log(`Page component:`, pageComponent.value)
-    
+
     pageData.value = await window.mqbox?.plugin.getPage(pluginId.value)
     pluginData.value = await window.mqbox?.plugin.execute(pluginId.value, 'getPageData', {})
     console.log(`Page data:`, pluginData.value)

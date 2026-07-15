@@ -7,10 +7,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
-      name: 'EverythingPlugin',
+      entry: {
+        index: resolve(__dirname, 'src/index.ts'),
+        Config: resolve(__dirname, 'src/Config.vue')
+      },
       formats: ['cjs'],
-      fileName: 'index'
+      fileName: (format, entryName) => `${entryName}.js`
     },
     rollupOptions: {
       external: ['electron', 'path', 'fs', 'child_process'],

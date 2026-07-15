@@ -129,7 +129,7 @@ const handleClipboardChanged = () => {
 }
 
 const handlePluginExecuted = (data: { pluginId: string, action: string }) => {
-  if (data.action !== 'getPanelData') {
+  if (data.action !== 'getPanelData' && data.action !== 'getPageData') {
     refreshPanelData(data.pluginId)
   }
 }
@@ -204,8 +204,8 @@ onUnmounted(() => {
             />
           </template>
 
-<div v-for="plugin in enabledPlugins.filter(p => 
-              !panels.some(panel => panel.pluginId === p.id) && 
+<div v-for="plugin in enabledPlugins.filter(p =>
+              !panels.some(panel => panel.pluginId === p.id) &&
               (p.hasPanel || p.hasPage)
             )" :key="plugin.id"
             class="rounded-lg bg-white border border-[#E0E0E0] p-[10px] flex items-center gap-[8px] hover:shadow-md transition-shadow cursor-pointer"

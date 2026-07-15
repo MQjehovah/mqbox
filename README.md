@@ -70,9 +70,25 @@ npx vitest --config tests/vitest.config.ts
 
 项目使用 GitHub Actions 进行持续集成，流水线包含：
 1. **代码质量门禁** — ESLint 检查 + TypeScript 类型检查
-2. **单元测试** — Vitest 运行所有测试
+2. **单元测试** — Vitest 运行核心 + 插件测试
 3. **安全检查** — 扫描密钥、硬编码令牌和 TODO 遗留
-4. **构建验证** — 验证主进程可正常构建
+4. **构建验证** — 验证主进程及所有插件可正常构建
+
+### 插件测试（以 quick-notes 为例）
+
+```bash
+# 单独安装插件依赖
+cd plugins/quick-notes && npm install
+
+# 运行插件测试
+cd plugins/quick-notes && npx vitest run
+
+# 带覆盖率
+cd plugins/quick-notes && npx vitest run --coverage
+
+# 观察模式
+cd plugins/quick-notes && npx vitest
+```
 
 ## 目录结构
 
@@ -120,7 +136,7 @@ mqbox/
 - **截图工具** — 支持区域截图、全屏截图、多显示器跨屏截图
 - **剪贴板历史** — 记录并管理剪贴板内容
 - **媒体播放器** — 播放本地音视频文件
-- **快速笔记** — 随手记录灵感
+- **快速笔记** — 随手记录灵感，支持笔记详情弹窗编辑
 - **待办事项** — 任务管理
 - **插件系统** — 支持第三方扩展开发
 

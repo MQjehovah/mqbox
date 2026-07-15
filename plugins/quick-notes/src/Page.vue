@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-
-interface Note {
-  id: string
-  content: string
-  tags: string[]
-  time: number
-}
+import type { Note } from './types'
 
 interface Props {
   data: {
@@ -33,7 +27,7 @@ const formatTime = (timestamp: number) => {
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMs / 3600000)
   const diffDays = Math.floor(diffMs / 86400000)
-  
+
   if (diffMins < 1) return '刚刚'
   if (diffMins < 60) return `${diffMins}分钟前`
   if (diffHours < 24) return `${diffHours}小时前`
@@ -43,10 +37,10 @@ const formatTime = (timestamp: number) => {
 
 const handleAdd = async () => {
   if (!newContent.value.trim()) return
-  
+
   const tags = newTags.value.split(',').map(t => t.trim()).filter(t => t)
   await props.execute('add', { content: newContent.value.trim(), tags })
-  
+
   newContent.value = ''
   newTags.value = ''
   isAdding.value = false
@@ -62,7 +56,7 @@ const handleDelete = async (id: string) => {
     <div class="p-4 bg-gray-100 border-b border-gray-200">
       <div class="flex items-center justify-between">
         <span class="text-sm text-gray-800 font-medium">笔记列表 ({{ data.notes.length }})</span>
-        <button 
+        <button
           class="h-8 rounded-md bg-yellow-500 text-white text-sm px-3 hover:bg-yellow-600 flex items-center gap-1"
           @click="isAdding = true"
         >
@@ -75,24 +69,24 @@ const handleDelete = async (id: string) => {
     </div>
 
     <div v-if="isAdding" class="p-3 bg-yellow-50 border-b border-yellow-200">
-      <textarea 
+      <textarea
         v-model="newContent"
         class="w-full h-20 p-2 rounded-md border border-gray-200 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-yellow-400"
         placeholder="输入笔记内容..."
       ></textarea>
-      <input 
+      <input
         v-model="newTags"
         class="w-full mt-2 p-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-400"
         placeholder="标签（用逗号分隔）"
       />
       <div class="flex gap-2 mt-2">
-        <button 
+        <button
           class="flex-1 h-7 rounded-md bg-yellow-500 text-white text-sm hover:bg-yellow-600"
           @click="handleAdd"
         >
           保存
         </button>
-        <button 
+        <button
           class="flex-1 h-7 rounded-md bg-gray-200 text-gray-600 text-sm hover:bg-gray-300"
           @click="isAdding = false; newContent = ''; newTags = ''"
         >
@@ -111,7 +105,7 @@ const handleDelete = async (id: string) => {
       </div>
 
       <div v-else class="flex flex-col gap-2">
-        <div 
+        <div
           v-for="note in sortedNotes"
           :key="note.id"
           class="p-3 rounded-lg bg-white border border-gray-200 hover:border-gray-300"
@@ -121,8 +115,8 @@ const handleDelete = async (id: string) => {
             <div class="flex items-center gap-2">
               <span class="text-xs text-gray-400">{{ formatTime(note.time) }}</span>
               <div v-if="note.tags.length > 0" class="flex gap-1">
-                <span 
-                  v-for="tag in note.tags" 
+                <span
+                  v-for="tag in note.tags"
                   :key="tag"
                   class="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-600"
                 >
@@ -130,7 +124,7 @@ const handleDelete = async (id: string) => {
                 </span>
               </div>
             </div>
-            <button 
+            <button
               class="w-6 h-6 rounded-md flex items-center justify-center hover:bg-red-50"
               @click="handleDelete(note.id)"
             >
