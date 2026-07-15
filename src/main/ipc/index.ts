@@ -5,6 +5,7 @@ import { listPlugins, enablePlugin, disablePlugin, executePlugin, getSearchProvi
 import { showPluginPage } from '../pluginPage'
 import { getConfig, setConfig } from '../config'
 import { showWindow } from '../windowManager'
+import { getCustomShortcuts, addCustomShortcut, removeCustomShortcut } from '../shortcut'
 import { captureAllScreens, captureRegion, captureFullscreen, startScreenshot, cancelScreenshot, getCachedScreenshot, addToHistory, getHistory, deleteFromHistory, clearHistory } from '../screenshot'
 import { showEditor, pinImage, saveImage, copyImage, closeEditor, closeAllPins } from '../pinWindow'
 
@@ -467,5 +468,20 @@ ipcMain.on('screenshot:cancel', () => {
     } catch (e) {
       console.error('screenshot:close-all-pins error:', e)
     }
+  })
+
+  // ====== 快捷键管理 ======
+  ipcMain.handle('shortcut:list', async () => {
+    return getCustomShortcuts()
+  })
+
+  ipcMain.handle('shortcut:add', async (_, binding: { accelerator: string; pluginId: string; command: string; args?: any; label?: string }) => {
+    await addCustomShortcut(binding)
+    return { success: true }
+  })
+
+  ipcMain.handle('shortcut:remove', async (_, accelerator: string) => {
+    await removeCustomShortcut(accelerator)
+    return { success: true }
   })
 }

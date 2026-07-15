@@ -63,6 +63,11 @@ clipboard: {
     getHistory: () => Promise<Array<{ id: string; dataUrl: string; time: number; type: string; width: number; height: number }>>
     deleteHistory: (id: string) => Promise<void>
     clearHistory: () => Promise<void>
+  },
+  shortcut: {
+    list: () => Promise<Array<{ accelerator: string; pluginId: string; command: string; args?: any; label?: string }>>
+    add: (binding: { accelerator: string; pluginId: string; command: string; args?: any; label?: string }) => Promise<{ success: boolean }>
+    remove: (accelerator: string) => Promise<{ success: boolean }>
   }
 }
 
